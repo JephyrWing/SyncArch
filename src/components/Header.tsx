@@ -1,21 +1,35 @@
 import React, { useState } from 'react';
 import { 
   Layers, 
-  Sparkles, 
   Download, 
   Lock, 
   Unlock, 
   History, 
   Eye, 
   CheckCircle2, 
-  Edit3,
-  Check,
-  Radio,
-  FileCode2
+  Edit3, 
+  Check, 
+  Radio, 
+  FileCode2, 
+  FolderKanban, 
+  ChevronDown, 
+  Plus, 
+  Briefcase, 
+  Copy, 
+  Trash2, 
+  Database,
+  Menu,
+  X
 } from 'lucide-react';
-import type { StepNumber, TeamMember, SnapshotHistory } from '../types/index.ts';
+import type { StepNumber, TeamMember, SnapshotHistory, ProjectData, SqlDialect } from '../types/index.ts';
 
 interface HeaderProps {
+  projects: ProjectData[];
+  currentProject: ProjectData;
+  onSelectProject: (id: string) => void;
+  onCreateProject: (title: string, summary: string, categoryTag: string, targetDbms: SqlDialect) => void;
+  onCloneProject?: (id: string) => void;
+  onDeleteProject?: (id: string) => void;
   title: string;
   onUpdateTitle: (title: string) => void;
   currentStep: StepNumber;
@@ -29,11 +43,25 @@ interface HeaderProps {
   onSaveSnapshot: (name: string) => void;
   onRestoreSnapshot: (id: string) => void;
   onOpenExport: () => void;
-  onOpenAiDraft: () => void;
-  isAiGenerating: boolean;
 }
 
+const DBMS_OPTIONS: { id: SqlDialect; label: string }[] = [
+  { id: 'postgres', label: 'PostgreSQL 16' },
+  { id: 'mysql', label: 'MySQL 8.0' },
+  { id: 'mariadb', label: 'MariaDB 11' },
+  { id: 'oracle', label: 'Oracle 19c/21c' },
+  { id: 'mssql', label: 'MS SQL Server' },
+  { id: 'sqlite', label: 'SQLite 3' },
+  { id: 'prisma', label: 'Prisma Schema' },
+];
+
 export const Header: React.FC<HeaderProps> = ({
+  projects,
+  currentProject,
+  onSelectProject,
+  onCreateProject,
+  onCloneProject,
+  onDeleteProject,
   title,
   onUpdateTitle,
   currentStep,
@@ -47,19 +75,25 @@ export const Header: React.FC<HeaderProps> = ({
   onSaveSnapshot,
   onRestoreSnapshot,
   onOpenExport,
-  onOpenAiDraft,
-  isAiGenerating,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
   const [showSnapshotMenu, setShowSnapshotMenu] = useState(false);
   const [newSnapshotName, setNewSnapshotName] = useState('');
 
+  // Project Switcher Modal/Dropdown
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [newProjTitle, setNewProjTitle] = useState('');
+  const [newProjSummary, setNewProjSummary] = useState('');
+  const [newProjCategory, setNewProjCategory] = useState('사내 솔루션');
+  const [newProjDbms, setNewProjDbms] = useState<SqlDialect>('postgres');
+
   const steps = [
-    { num: 1 as StepNumber, label: 'Step 1. 아이디어 보드' },
-    { num: 2 as StepNumber, label: 'Step 2. 기능·API 명세' },
-    { num: 3 as StepNumber, label: 'Step 3. 시스템 아키텍처' },
-    { num: 4 as StepNumber, label: 'Step 4. DB(ERD) 설계' },
+    { num: 1 as StepNumber, label: '1. 아이디어', fullLabel: 'Step 1. 아이디어 보드' },
+    { num: 2 as StepNumber, label: '2. API 명세', fullLabel: 'Step 2. 기능·API 명세' },
+    { num: 3 as StepNumber, label: '3. 아키텍처', fullLabel: 'Step 3. 시스템 아키텍처' },
+    { num: 4 as StepNumber, label: '4. DB 설계', fullLabel: 'Step 4. DB(ERD) 설계' },
   ];
 
   const handleTitleSubmit = () => {
@@ -78,63 +112,148 @@ export const Header: React.FC<HeaderProps> = ({
     setShowSnapshotMenu(false);
   };
 
+  const handleCreateNewProjectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjTitle.trim()) return;
+    onCreateProject(
+      newProjTitle.trim(),
+      newProjSummary.trim() || `${newProjTitle} 시스템`,
+      newProjCategory.trim() || '신규 프로젝트',
+      newProjDbms
+    );
+    setNewProjTitle('');
+    setNewProjSummary('');
+    setShowNewProjectModal(false);
+    setShowProjectDropdown(false);
+  };
+
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-800 text-slate-100 px-4 flex items-center justify-between select-none z-30 shrink-0">
-      {/* Left: Brand, Project Title & Sync Status */}
-      <div className="flex items-center gap-3 min-w-[280px]">
-        <div className="flex items-center gap-2 font-bold tracking-tight text-indigo-400">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-sm shadow-indigo-500/20">
-            <Layers className="w-4 h-4" />
+    <header className="h-14 bg-slate-900 border-b border-slate-800 text-slate-100 px-3 sm:px-4 flex items-center justify-between select-none z-30 shrink-0 gap-2 overflow-x-auto">
+      {/* Left: Brand, Project Switcher & Status */}
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        {/* Brand */}
+        <div className="flex items-center gap-1.5 sm:gap-2 font-bold tracking-tight text-indigo-400 shrink-0">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-sm shadow-indigo-500/20">
+            <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
-          <span className="text-base bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-200 bg-clip-text text-transparent">
+          <span className="text-sm sm:text-base bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-200 bg-clip-text text-transparent">
             SyncArch
           </span>
         </div>
 
-        <div className="h-4 w-px bg-slate-700/80 mx-0.5" />
+        <div className="h-4 w-px bg-slate-700/80 mx-0.5 hidden sm:block" />
 
-        {/* Project Title inline editor */}
-        {isEditingTitle ? (
-          <div className="flex items-center gap-1">
-            <input
-              type="text"
-              value={tempTitle}
-              onChange={(e) => setTempTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
-              onBlur={handleTitleSubmit}
-              autoFocus
-              className="bg-slate-800 border border-indigo-500 rounded px-2 py-0.5 text-xs text-white focus:outline-none w-56 font-medium"
-            />
-            <button
-              onClick={handleTitleSubmit}
-              className="p-1 text-emerald-400 hover:text-emerald-300"
-              title="저장"
-            >
-              <Check className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
+        {/* Multi-Project Selector Dropdown */}
+        <div className="relative">
           <button
-            onClick={() => {
-              setTempTitle(title);
-              setIsEditingTitle(true);
-            }}
-            className="group flex items-center gap-1.5 text-xs font-semibold text-slate-200 hover:text-white max-w-[220px] truncate px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors"
-            title="클릭하여 프로젝트명 수정"
+            onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+            className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors max-w-[130px] sm:max-w-[180px] lg:max-w-[240px]"
+            title="프로젝트 목록 조회 및 전환"
           >
-            <span className="truncate">{title}</span>
-            <Edit3 className="w-3 h-3 text-slate-500 group-hover:text-slate-300 opacity-60 group-hover:opacity-100 shrink-0" />
+            <FolderKanban className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="truncate">{currentProject.title}</span>
+            <span className="hidden md:inline-block text-[9px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40 shrink-0 uppercase font-mono">
+              {currentProject.targetDbms}
+            </span>
+            <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
           </button>
-        )}
 
-        {/* Live Sync badge */}
-        <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[10px] text-emerald-400 font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>CRDT Live</span>
+          {showProjectDropdown && (
+            <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2.5 z-50 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-2 py-1.5 font-bold text-slate-300 flex items-center justify-between border-b border-slate-800 mb-1.5">
+                <span>등록된 설계 프로젝트 ({projects.length})</span>
+                <button
+                  onClick={() => {
+                    setShowProjectDropdown(false);
+                    setShowNewProjectModal(true);
+                  }}
+                  className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 text-[11px]"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>새 프로젝트</span>
+                </button>
+              </div>
+
+              <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                {projects.map((proj) => {
+                  const isSelected = proj.id === currentProject.id;
+                  return (
+                    <div
+                      key={proj.id}
+                      onClick={() => {
+                        onSelectProject(proj.id);
+                        setShowProjectDropdown(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-lg flex items-start justify-between gap-2 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-600/20 border border-indigo-500/50 text-white font-semibold shadow'
+                          : 'hover:bg-slate-800/70 text-slate-300 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-0.5 truncate flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-semibold text-xs text-slate-100">{proj.title}</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-sky-300 font-mono font-bold shrink-0">
+                            {proj.targetDbms.toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 truncate">{proj.summary}</span>
+                        <div className="text-[9px] text-slate-500 font-mono mt-0.5">
+                          테이블 {proj.tables?.length || 0}개 · 기능 {proj.features?.length || 0}개
+                        </div>
+                      </div>
+
+                      {/* Clone & Delete Actions */}
+                      <div className="flex items-center gap-1 shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                        {onCloneProject && (
+                          <button
+                            onClick={() => {
+                              onCloneProject(proj.id);
+                              setShowProjectDropdown(false);
+                            }}
+                            className="p-1 text-slate-500 hover:text-indigo-300"
+                            title="프로젝트 복제"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        )}
+                        {onDeleteProject && projects.length > 1 && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`'${proj.title}' 프로젝트를 삭제하시겠습니까?`)) {
+                                onDeleteProject(proj.id);
+                              }
+                            }}
+                            className="p-1 text-slate-500 hover:text-rose-400"
+                            title="프로젝트 삭제"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="border-t border-slate-800 mt-2.5 pt-2">
+                <button
+                  onClick={() => {
+                    setShowProjectDropdown(false);
+                    setShowNewProjectModal(true);
+                  }}
+                  className="w-full py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-center text-xs flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>신규 설계 프로젝트 등록</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Snapshot Dropdown */}
-        <div className="relative">
+        <div className="relative hidden sm:block">
           <button
             onClick={() => setShowSnapshotMenu(!showSnapshotMenu)}
             className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
@@ -176,18 +295,16 @@ export const Header: React.FC<HeaderProps> = ({
                       key={snap.id}
                       className="flex items-center justify-between p-1.5 rounded hover:bg-slate-800 group transition-colors"
                     >
-                      <div className="truncate mr-2">
-                        <div className="font-medium text-slate-200 truncate">{snap.name}</div>
-                        <div className="text-[10px] text-slate-500">{snap.dateStr}</div>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-200">{snap.name}</span>
+                        <span className="text-[10px] text-slate-500">{snap.dateStr}</span>
                       </div>
                       <button
                         onClick={() => {
-                          if (confirm(`'${snap.name}' 시점으로 복원하시겠습니까?`)) {
-                            onRestoreSnapshot(snap.id);
-                            setShowSnapshotMenu(false);
-                          }
+                          onRestoreSnapshot(snap.id);
+                          setShowSnapshotMenu(false);
                         }}
-                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold px-2 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/50 hover:bg-indigo-900/80 shrink-0"
+                        className="opacity-0 group-hover:opacity-100 px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-[10px] text-white font-medium transition-all"
                       >
                         복원
                       </button>
@@ -201,135 +318,171 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Center: 4-Step Pipeline Switcher */}
-      <nav aria-label="Pipeline Steps" className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 shadow-inner">
-        {steps.map((s) => {
-          const isActive = currentStep === s.num;
-          const isLocked = stepLocks[s.num];
+      <nav className="flex items-center bg-slate-950/70 p-1 rounded-xl border border-slate-800/80 shadow-inner shrink-0 overflow-x-auto">
+        {steps.map((st) => {
+          const isActive = currentStep === st.num;
+          const isLocked = stepLocks[st.num];
+
           return (
-            <div key={s.num} className="flex items-center">
-              <button
-                data-testid={`step-btn-${s.num}`}
-                onClick={() => onChangeStep(s.num)}
-                className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isLocked ? 'bg-amber-400 ring-2 ring-amber-500/30' : isActive ? 'bg-white' : 'bg-slate-600'
-                  }`}
-                />
-                <span>{s.label}</span>
-                {isLocked && <Lock className="w-3 h-3 text-amber-300 ml-0.5 inline shrink-0" />}
-              </button>
-              {s.num < 4 && <div className="w-2.5 h-0.5 bg-slate-800 mx-0.5 rounded-full" />}
-            </div>
+            <button
+              key={st.num}
+              onClick={() => onChangeStep(st.num)}
+              className={`relative px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
+                isActive
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <span className="inline sm:hidden">{st.label}</span>
+              <span className="hidden sm:inline">{st.fullLabel}</span>
+              {isLocked && <Lock className="w-3 h-3 text-amber-400 ml-0.5 shrink-0" />}
+            </button>
           );
         })}
-
-        {/* Step Lock Toggle Button */}
-        <div className="h-4 w-px bg-slate-800 mx-1.5" />
-        <button
-          onClick={() => onToggleLock(currentStep)}
-          className={`px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
-            stepLocks[currentStep]
-              ? 'bg-amber-950/70 text-amber-300 border border-amber-600/40 hover:bg-amber-900/60'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-          }`}
-          title={stepLocks[currentStep] ? '현재 단계 잠금 해제' : '현재 단계 확정 잠금 (수정 방지)'}
-        >
-          {stepLocks[currentStep] ? (
-            <>
-              <Lock className="w-3 h-3 text-amber-400" />
-              <span className="hidden sm:inline">잠김</span>
-            </>
-          ) : (
-            <>
-              <Unlock className="w-3 h-3" />
-              <span className="hidden sm:inline">확정</span>
-            </>
-          )}
-        </button>
       </nav>
 
-      {/* Right: Team Avatars (5 Collaborators), Spotlight, AI Draft, Export */}
-      <div className="flex items-center gap-2.5">
-        {/* Spotlight Follow indicator banner if active */}
-        {activeSpotlightMember && (
-          <div className="hidden 2xl:flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 animate-pulse">
-            <Eye className="w-3.5 h-3.5 text-amber-400" />
-            <span>{activeSpotlightMember.name} 팔로우 중 (Step {activeSpotlightMember.currentStep})</span>
-          </div>
-        )}
+      {/* Right: Team, Lock, and Export */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Step Lock Toggle */}
+        <button
+          onClick={() => onToggleLock(currentStep)}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            stepLocks[currentStep]
+              ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
+              : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+          }`}
+          title={stepLocks[currentStep] ? '단계 잠금 해제' : '현재 단계 수정 잠금'}
+        >
+          {stepLocks[currentStep] ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+        </button>
 
-        {/* 5-Person Avatar Group */}
-        <div className="flex items-center -space-x-1.5 hover:space-x-1 transition-all">
+        {/* 5-Person Team Avatars */}
+        <div className="hidden lg:flex items-center gap-1 border-l border-slate-800 pl-2">
           {teamMembers.map((member) => {
-            const isSpot = member.isSpotlight;
+            const isSpotlight = activeSpotlightMember?.id === member.id;
             return (
               <button
                 key={member.id}
                 onClick={() => onToggleSpotlight(member.id)}
-                className={`relative group rounded-full transition-transform hover:scale-110 focus:outline-none ${
-                  isSpot ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 z-10 scale-105' : 'hover:z-10'
+                className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white transition-transform ${
+                  member.avatarBg
+                } ${
+                  isSpotlight
+                    ? 'ring-2 ring-amber-400 scale-110 shadow-lg shadow-amber-500/30'
+                    : 'hover:scale-105 opacity-90'
                 }`}
-                title={`${member.name} (${member.role}) - 현재 Step ${member.currentStep} 작업 중\n클릭 시 팔로우(Spotlight) 모드 토글`}
+                title={`${member.name} (${member.role}) - 클릭하여 팔로우 모드`}
               >
-                <div
-                  className={`w-7 h-7 rounded-full ${member.avatarBg} text-white font-bold text-[10px] flex items-center justify-center border-2 border-slate-900 shadow`}
-                >
-                  {member.name.slice(0, 1)}
-                </div>
-                {/* Step badge pill */}
-                <span className="absolute -bottom-1 -right-1 bg-slate-900 text-slate-300 text-[9px] font-bold px-1 rounded-full border border-slate-700 leading-tight">
-                  S{member.currentStep}
-                </span>
-
-                {/* Hover Tooltip */}
-                <div className="absolute right-0 top-9 hidden group-hover:block bg-slate-800 border border-slate-700 text-slate-200 text-[10px] rounded p-1.5 shadow-xl whitespace-nowrap z-50 pointer-events-none">
-                  <div className="font-semibold text-white flex items-center gap-1">
-                    <span>{member.name}</span>
-                    <span className="text-[9px] px-1 py-0.2 bg-slate-700 rounded text-sky-300 font-mono">
-                      {member.badge}
-                    </span>
-                  </div>
-                  <div className="text-slate-400">{member.role}</div>
-                  <div className="text-amber-400 font-medium mt-0.5">
-                    {isSpot ? '★ 팔로우 활성화됨' : '클릭하여 화면 팔로우'}
-                  </div>
-                </div>
+                {member.name.charAt(0)}
+                {isSpotlight && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full border-2 border-slate-900" />
+                )}
               </button>
             );
           })}
         </div>
 
-        <div className="h-4 w-px bg-slate-800 mx-0.5" />
-
-        {/* AI Co-Architect Button */}
+        {/* Export Engine Modal Trigger */}
         <button
-          data-testid="btn-ai-draft"
-          onClick={onOpenAiDraft}
-          disabled={isAiGenerating}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all disabled:opacity-50"
-          title="현재 단계에 대한 AI Co-Architect 초안 제안 생성 (Diff & Accept 방식)"
-        >
-          <Sparkles className={`w-3.5 h-3.5 ${isAiGenerating ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">AI 초안 생성</span>
-        </button>
-
-        {/* Export Button */}
-        <button
-          data-testid="btn-export"
           onClick={onOpenExport}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-100 font-semibold text-xs active:scale-95 transition-all shadow-sm"
-          title="PostgreSQL/MySQL/SQLite/Prisma DDL 및 Markdown 명세서 추출"
+          className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
         >
-          <Download className="w-3.5 h-3.5 text-sky-400" />
+          <Download className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">내보내기 (SQL / MD)</span>
+          <span className="sm:hidden inline">내보내기</span>
         </button>
       </div>
+
+      {/* New Project Registration Modal */}
+      {showNewProjectModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 text-xs text-slate-100">
+            <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-indigo-400" />
+                <span>신규 설계 프로젝트 등록</span>
+              </h3>
+              <button
+                onClick={() => setShowNewProjectModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                닫기
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewProjectSubmit} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-semibold text-slate-300">프로젝트명</label>
+                <input
+                  type="text"
+                  placeholder="예: 사내 기술 블로그 &amp; Q&amp;A 지식 허브"
+                  value={newProjTitle}
+                  onChange={(e) => setNewProjTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white mt-1 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300">프로젝트 한 줄 요약 / 목표</label>
+                <input
+                  type="text"
+                  placeholder="예: 개발팀 내부 기술 지식 공유 및 검색 시스템"
+                  value={newProjSummary}
+                  onChange={(e) => setNewProjSummary(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white mt-1 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">카테고리</label>
+                  <input
+                    type="text"
+                    placeholder="예: 생산성 / DevTools"
+                    value={newProjCategory}
+                    onChange={(e) => setNewProjCategory(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white mt-1 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                    <Database className="w-3 h-3 text-sky-400" /> 목표 DBMS
+                  </label>
+                  <select
+                    value={newProjDbms}
+                    onChange={(e) => setNewProjDbms(e.target.value as SqlDialect)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white mt-1 focus:outline-none font-mono"
+                  >
+                    {DBMS_OPTIONS.map((db) => (
+                      <option key={db.id} value={db.id}>
+                        {db.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewProjectModal(false)}
+                  className="px-3.5 py-1.5 text-slate-400 hover:text-slate-200"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newProjTitle.trim()}
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg font-bold shadow"
+                >
+                  프로젝트 등록
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

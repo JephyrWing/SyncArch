@@ -99,6 +99,7 @@ test('runErdLinter flags broken foreign key references and missing table mapping
       requestFields: 'amount',
       responseFields: 'status',
       summary: '결제',
+      status: 'PLANNED',
     },
   ];
 

@@ -1,4 +1,4 @@
-import type { ErdTable, ExportSettings } from '../types/index.ts';
+import type { ErdTable, ExportSettings, SqlDialect } from '../types/index.ts';
 
 /**
  * Topologically sorts tables based on foreign key references.
@@ -67,28 +67,62 @@ export function sortTablesTopologically(tables: ErdTable[]): ErdTable[] {
 /**
  * Maps standard data types to dialect specific types
  */
-function mapDataType(type: string, dialect: ExportSettings['dialect']): string {
+function mapDataType(type: string, dialect: SqlDialect): string {
   const upper = type.toUpperCase().trim();
+  
   if (dialect === 'postgres') {
     return upper;
-  } else if (dialect === 'mysql') {
-    if (upper === 'UUID') return 'VARCHAR(36)';
+  }
+  
+  if (dialect === 'mysql' || dialect === 'mariadb') {
+    if (upper === 'UUID') return dialect === 'mariadb' ? 'UUID' : 'VARCHAR(36)';
     if (upper === 'TIMESTAMPTZ') return 'DATETIME(6)';
     if (upper === 'BOOLEAN') return 'TINYINT(1)';
     if (upper === 'TEXT') return 'LONGTEXT';
+    if (upper === 'JSONB') return 'JSON';
     return upper;
-  } else if (dialect === 'sqlite') {
+  }
+
+  if (dialect === 'oracle') {
+    if (upper === 'UUID') return 'VARCHAR2(36)';
+    if (upper.startsWith('VARCHAR')) return upper.replace('VARCHAR', 'VARCHAR2');
+    if (upper === 'TEXT') return 'CLOB';
+    if (upper === 'JSONB' || upper === 'JSON') return 'CLOB';
+    if (upper === 'TIMESTAMPTZ') return 'TIMESTAMP WITH TIME ZONE';
+    if (upper === 'DATE') return 'DATE';
+    if (upper === 'BOOLEAN') return 'NUMBER(1)';
+    if (upper === 'BIGINT') return 'NUMBER(19)';
+    if (upper === 'INTEGER' || upper === 'INT') return 'NUMBER(10)';
+    return upper;
+  }
+
+  if (dialect === 'mssql') {
+    if (upper === 'UUID') return 'UNIQUEIDENTIFIER';
+    if (upper.startsWith('VARCHAR')) return upper.replace('VARCHAR', 'NVARCHAR');
+    if (upper === 'TEXT') return 'NVARCHAR(MAX)';
+    if (upper === 'JSONB' || upper === 'JSON') return 'NVARCHAR(MAX)';
+    if (upper === 'TIMESTAMPTZ') return 'DATETIMEOFFSET';
+    if (upper === 'DATE') return 'DATE';
+    if (upper === 'BOOLEAN') return 'BIT';
+    if (upper === 'BIGINT') return 'BIGINT';
+    if (upper === 'INTEGER' || upper === 'INT') return 'INT';
+    return upper;
+  }
+
+  if (dialect === 'sqlite') {
     if (upper.includes('INT')) return 'INTEGER';
     if (upper === 'UUID' || upper.includes('VARCHAR') || upper === 'TEXT') return 'TEXT';
     if (upper === 'BOOLEAN') return 'INTEGER';
     if (upper.includes('TIME') || upper.includes('DATE')) return 'TEXT';
+    if (upper.includes('JSON')) return 'TEXT';
     return upper;
   }
+
   return upper;
 }
 
 /**
- * Generates SQL DDL or Prisma Schema based on options
+ * Generates SQL DDL or Prisma Schema based on options and selected DBMS
  */
 export function generateSql(tables: ErdTable[], settings: ExportSettings): string {
   if (tables.length === 0) return '-- 정의된 테이블이 없습니다.';
@@ -99,38 +133,76 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 
   const sortedTables = sortTablesTopologically(tables);
   const lines: string[] = [];
+  const dbmsTitleMap: Record<SqlDialect, string> = {
+    postgres: 'PostgreSQL 16',
+    mysql: 'MySQL 8.0',
+    mariadb: 'MariaDB 11.x',
+    oracle: 'Oracle Database 19c/21c',
+    mssql: 'Microsoft SQL Server (T-SQL)',
+    sqlite: 'SQLite 3',
+    prisma: 'Prisma Schema DSL'
+  };
 
   lines.push(`-- ==============================================================`);
   lines.push(`-- SyncArch Auto-generated DDL Script`);
-  lines.push(`-- Dialect: ${settings.dialect.toUpperCase()}`);
-  lines.push(`-- Generated: ${new Date().toISOString()}`);
+  lines.push(`-- Target DBMS: ${dbmsTitleMap[settings.dialect] || settings.dialect.toUpperCase()}`);
+  lines.push(`-- Generated At: ${new Date().toISOString()}`);
   lines.push(`-- ==============================================================\n`);
 
-  // Drop tables in reverse topological order (children first)
+  if (settings.dialect === 'mysql' || settings.dialect === 'mariadb') {
+    lines.push(`SET FOREIGN_KEY_CHECKS = 0;\n`);
+  } else if (settings.dialect === 'sqlite') {
+    lines.push(`PRAGMA foreign_keys = ON;\n`);
+  }
+
+  // 1. Drop existing tables
   if (settings.includeDropTable) {
     lines.push(`-- 1. DROP EXISTING TABLES (Reverse Dependency Order)`);
     const reverseTables = [...sortedTables].reverse();
     reverseTables.forEach(t => {
-      lines.push(`DROP TABLE IF EXISTS ${t.name} CASCADE;`);
+      if (settings.dialect === 'postgres') {
+        lines.push(`DROP TABLE IF EXISTS ${t.name} CASCADE;`);
+      } else if (settings.dialect === 'mysql' || settings.dialect === 'mariadb' || settings.dialect === 'sqlite') {
+        lines.push(`DROP TABLE IF EXISTS ${t.name};`);
+      } else if (settings.dialect === 'oracle') {
+        lines.push(`BEGIN EXECUTE IMMEDIATE 'DROP TABLE ${t.name.toUpperCase()} CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;\n/`);
+      } else if (settings.dialect === 'mssql') {
+        lines.push(`IF OBJECT_ID('dbo.${t.name}', 'U') IS NOT NULL DROP TABLE dbo.${t.name};`);
+      }
     });
-    lines.push('');
+    if (settings.dialect === 'mssql') {
+      lines.push('GO\n');
+    } else {
+      lines.push('');
+    }
   }
 
-  // Create tables
+  // 2. Create tables
   lines.push(`-- 2. CREATE TABLES`);
   sortedTables.forEach(table => {
-    lines.push(`-- Table: ${table.name} (${table.comment || '설명 없음'})`);
-    lines.push(`CREATE TABLE ${table.name} (`);
+    const tableName = settings.dialect === 'oracle' ? table.name.toUpperCase() : table.name;
+    lines.push(`-- Table: ${tableName} (${table.comment || '설명 없음'})`);
+    
+    if (settings.dialect === 'mssql') {
+      lines.push(`CREATE TABLE dbo.${tableName} (`);
+    } else {
+      lines.push(`CREATE TABLE ${tableName} (`);
+    }
 
     const colDefinitions: string[] = [];
     const pkCols: string[] = [];
     const fkConstraints: string[] = [];
 
     table.columns.forEach(col => {
-      let def = `    ${col.name.padEnd(16)} ${mapDataType(col.dataType, settings.dialect)}`;
+      const colName = settings.dialect === 'oracle' ? col.name.toUpperCase() : col.name;
+      let mappedType = mapDataType(col.dataType, settings.dialect);
+      let def = `    ${colName.padEnd(16)} ${mappedType}`;
 
       if (col.isPrimaryKey) {
-        pkCols.push(col.name);
+        pkCols.push(colName);
+        if (settings.dialect === 'oracle' && col.dataType.toUpperCase().includes('INT')) {
+          def += ' GENERATED ALWAYS AS IDENTITY';
+        }
       }
       if (!col.isNullable) {
         def += ' NOT NULL';
@@ -139,11 +211,17 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
         def += ' UNIQUE';
       }
       if (col.defaultValue && col.defaultValue.trim() !== '') {
-        def += ` DEFAULT ${col.defaultValue}`;
+        let defaultVal = col.defaultValue;
+        if (settings.dialect === 'oracle' && defaultVal === 'CURRENT_TIMESTAMP') {
+          defaultVal = 'SYSTIMESTAMP';
+        } else if (settings.dialect === 'mssql' && defaultVal === 'CURRENT_TIMESTAMP') {
+          defaultVal = 'SYSUTCDATETIME()';
+        }
+        def += ` DEFAULT ${defaultVal}`;
       }
 
-      // MySQL inline comment support
-      if (settings.dialect === 'mysql' && settings.includeComments && col.comment) {
+      // MySQL/MariaDB inline comment support
+      if ((settings.dialect === 'mysql' || settings.dialect === 'mariadb') && settings.includeComments && col.comment) {
         def += ` COMMENT '${col.comment.replace(/'/g, "\\'")}'`;
       }
 
@@ -151,18 +229,28 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 
       // Foreign key
       if (settings.includeForeignKeys && col.isForeignKey && col.references) {
-        const [refTable, refCol] = col.references.split('.');
+        const [refTableRaw, refColRaw] = col.references.split('.');
+        const refTable = settings.dialect === 'oracle' ? refTableRaw.toUpperCase() : refTableRaw;
+        const refCol = settings.dialect === 'oracle' ? refColRaw.toUpperCase() : refColRaw;
+        
         if (refTable && refCol) {
-          fkConstraints.push(
-            `    CONSTRAINT fk_${table.name}_${col.name} FOREIGN KEY (${col.name}) REFERENCES ${refTable}(${refCol}) ON DELETE CASCADE`
-          );
+          const fkName = `fk_${tableName}_${colName}`;
+          if (settings.dialect === 'mssql') {
+            fkConstraints.push(
+              `    CONSTRAINT ${fkName} FOREIGN KEY (${colName}) REFERENCES dbo.${refTable}(${refCol}) ON DELETE CASCADE`
+            );
+          } else {
+            fkConstraints.push(
+              `    CONSTRAINT ${fkName} FOREIGN KEY (${colName}) REFERENCES ${refTable}(${refCol}) ON DELETE CASCADE`
+            );
+          }
         }
       }
     });
 
     // Primary key constraint
     if (pkCols.length > 0) {
-      colDefinitions.push(`    CONSTRAINT pk_${table.name} PRIMARY KEY (${pkCols.join(', ')})`);
+      colDefinitions.push(`    CONSTRAINT pk_${tableName} PRIMARY KEY (${pkCols.join(', ')})`);
     }
 
     // Append foreign keys
@@ -170,37 +258,62 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 
     lines.push(colDefinitions.join(',\n'));
     
-    if (settings.dialect === 'mysql' && settings.includeComments && table.comment) {
-      lines.push(`) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='${table.comment.replace(/'/g, "\\'")}';\n`);
+    if (settings.dialect === 'mysql' || settings.dialect === 'mariadb') {
+      if (settings.includeComments && table.comment) {
+        lines.push(`) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='${table.comment.replace(/'/g, "\\'")}';\n`);
+      } else {
+        lines.push(`) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n`);
+      }
     } else {
       lines.push(`);\n`);
     }
 
-    // PostgreSQL Comments
-    if (settings.dialect === 'postgres' && settings.includeComments) {
+    // PostgreSQL & Oracle Comments
+    if ((settings.dialect === 'postgres' || settings.dialect === 'oracle') && settings.includeComments) {
       if (table.comment) {
-        lines.push(`COMMENT ON TABLE ${table.name} IS '${table.comment.replace(/'/g, "''")}';`);
+        lines.push(`COMMENT ON TABLE ${tableName} IS '${table.comment.replace(/'/g, "''")}';`);
       }
       table.columns.forEach(c => {
+        const cName = settings.dialect === 'oracle' ? c.name.toUpperCase() : c.name;
         if (c.comment) {
-          lines.push(`COMMENT ON COLUMN ${table.name}.${c.name} IS '${c.comment.replace(/'/g, "''")}';`);
+          lines.push(`COMMENT ON COLUMN ${tableName}.${cName} IS '${c.comment.replace(/'/g, "''")}';`);
         }
       });
       lines.push('');
     }
+
+    if (settings.dialect === 'mssql') {
+      lines.push('GO\n');
+    }
   });
 
-  // Indexes
+  // 3. Indexes
   if (settings.includeIndexes) {
     lines.push(`-- 3. CREATE PERFORMANCE & FOREIGN KEY INDEXES`);
     sortedTables.forEach(table => {
+      const tableName = settings.dialect === 'oracle' ? table.name.toUpperCase() : table.name;
       table.columns.forEach(col => {
+        const colName = settings.dialect === 'oracle' ? col.name.toUpperCase() : col.name;
         if (col.isForeignKey && !col.isPrimaryKey) {
-          lines.push(`CREATE INDEX idx_${table.name}_${col.name} ON ${table.name} (${col.name});`);
+          if (settings.dialect === 'mssql') {
+            lines.push(`CREATE NONCLUSTERED INDEX idx_${tableName}_${colName} ON dbo.${tableName} (${colName});`);
+          } else if (settings.dialect === 'sqlite') {
+            lines.push(`CREATE INDEX IF NOT EXISTS idx_${tableName}_${colName} ON ${tableName} (${colName});`);
+          } else {
+            lines.push(`CREATE INDEX idx_${tableName}_${colName} ON ${tableName} (${colName});`);
+          }
         }
       });
     });
-    lines.push('');
+    if (settings.dialect === 'mssql') {
+      lines.push('GO\n');
+    } else {
+      lines.push('');
+    }
+  }
+
+  if (settings.dialect === 'mysql' || settings.dialect === 'mariadb') {
+    lines.push(`SET FOREIGN_KEY_CHECKS = 1;\n`);
   }
 
   return lines.join('\n');

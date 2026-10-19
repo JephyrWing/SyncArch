@@ -8,7 +8,8 @@ import {
   FileText, 
   Settings2, 
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Database
 } from 'lucide-react';
 import type { ErdTable, IdeaCard, FeatureSpec, ArchNode, ArchConnection, SqlDialect, ExportSettings } from '../types/index.ts';
 import { generateSql } from '../utils/sqlGenerator.ts';
@@ -24,7 +25,18 @@ interface ExportModalProps {
   nodes: ArchNode[];
   connections: ArchConnection[];
   tables: ErdTable[];
+  defaultDbms?: SqlDialect;
 }
+
+const DIALECT_OPTIONS: { id: SqlDialect; label: string; badge: string; desc: string }[] = [
+  { id: 'postgres', label: 'PostgreSQL 16', badge: 'Postgres', desc: 'UUID, TIMESTAMPTZ, COMMENT ON, CASCADE' },
+  { id: 'mysql', label: 'MySQL 8.0', badge: 'MySQL', desc: 'InnoDB, UTF8MB4, DATETIME(6), inline COMMENT' },
+  { id: 'mariadb', label: 'MariaDB 11', badge: 'MariaDB', desc: 'Aria/InnoDB, UTF8MB4, CHECK 제약조건' },
+  { id: 'oracle', label: 'Oracle 19c/21c', badge: 'Oracle', desc: 'VARCHAR2, NUMBER, SYSTIMESTAMP, IDENTITY' },
+  { id: 'mssql', label: 'MS SQL Server', badge: 'T-SQL', desc: 'NVARCHAR, DATETIMEOFFSET, IDENTITY(1,1), GO' },
+  { id: 'sqlite', label: 'SQLite 3', badge: 'SQLite', desc: 'AUTOINCREMENT, TEXT, PRAGMA foreign_keys' },
+  { id: 'prisma', label: 'Prisma Schema', badge: 'Prisma', desc: 'model DSL, @id, @default(uuid()), @relation' },
+];
 
 export const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
@@ -36,13 +48,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   nodes,
   connections,
   tables,
+  defaultDbms = 'postgres',
 }) => {
   const [activeTab, setActiveTab] = useState<'sql' | 'markdown'>('sql');
   const [copied, setCopied] = useState(false);
 
   // SQL Export Settings
   const [settings, setSettings] = useState<ExportSettings>({
-    dialect: 'postgres',
+    dialect: defaultDbms,
     includeDropTable: true,
     includeForeignKeys: true,
     includeIndexes: true,
@@ -71,7 +84,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   };
 
   const handleDownload = () => {
-    let filename = 'schema.sql';
+    let filename = `schema-${settings.dialect}.sql`;
     let mime = 'text/plain';
 
     if (activeTab === 'markdown') {
@@ -93,7 +106,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
       <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden text-slate-100">
         {/* Header */}
         <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
@@ -106,7 +119,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <span>산출물 내보내기 엔진 (Export Engine)</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                실행 가능한 데이터베이스 DDL 스크립트 및 통합 Markdown 아키텍처 명세서
+                선택한 DBMS 맞춤 DDL 스크립트 및 통합 Markdown 아키텍처 명세서
               </p>
             </div>
           </div>
@@ -147,34 +160,31 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Options Toolbar (for SQL tab) */}
         {activeTab === 'sql' && (
-          <div className="p-3 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between gap-4 text-xs shrink-0 flex-wrap">
-            {/* Dialect */}
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-300">Dialect:</span>
-              {(['postgres', 'mysql', 'sqlite', 'prisma'] as SqlDialect[]).map((d) => (
+          <div className="p-3 bg-slate-950/70 border-b border-slate-800 flex flex-col gap-2.5 text-xs shrink-0">
+            {/* Dialect Selector */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-slate-300 flex items-center gap-1">
+                <Database className="w-3.5 h-3.5 text-sky-400" /> 대상 DBMS:
+              </span>
+              {DIALECT_OPTIONS.map((d) => (
                 <button
-                  key={d}
-                  onClick={() => setSettings({ ...settings, dialect: d })}
-                  className={`px-2.5 py-1 rounded text-xs font-mono font-semibold border transition-all ${
-                    settings.dialect === d
-                      ? 'bg-sky-600 text-white border-sky-500 shadow-sm'
+                  key={d.id}
+                  onClick={() => setSettings({ ...settings, dialect: d.id })}
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold border transition-all ${
+                    settings.dialect === d.id
+                      ? 'bg-sky-600 text-white border-sky-400 shadow-sm ring-1 ring-sky-300'
                       : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
+                  title={d.desc}
                 >
-                  {d === 'postgres'
-                    ? 'PostgreSQL 16'
-                    : d === 'mysql'
-                    ? 'MySQL 8.0'
-                    : d === 'sqlite'
-                    ? 'SQLite 3'
-                    : 'Prisma Schema'}
+                  {d.label}
                 </button>
               ))}
             </div>
 
             {/* DDL Toggles */}
             {settings.dialect !== 'prisma' && (
-              <div className="flex items-center gap-3 text-[11px] text-slate-300">
+              <div className="flex items-center gap-4 text-[11px] text-slate-300 flex-wrap pt-1 border-t border-slate-800/60">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -191,7 +201,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     onChange={(e) => setSettings({ ...settings, includeForeignKeys: e.target.checked })}
                     className="rounded border-slate-700 text-sky-500"
                   />
-                  <span>FOREIGN KEY 제약조건</span>
+                  <span>FOREIGN KEY 외래키 제약조건</span>
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
@@ -209,7 +219,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     onChange={(e) => setSettings({ ...settings, includeComments: e.target.checked })}
                     className="rounded border-slate-700 text-sky-500"
                   />
-                  <span>COMMENT 포함</span>
+                  <span>COMMENT 주석 포함</span>
                 </label>
               </div>
             )}
@@ -228,7 +238,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <div className="text-xs text-slate-400">
             {activeTab === 'sql' ? (
               <span>
-                외래키 상속 순서에 따라 부모 테이블이 먼저 생성되도록 정렬되었습니다.
+                대상 DBMS: <strong className="text-sky-300 font-mono">{settings.dialect.toUpperCase()}</strong> · 외래키 종속성 순서에 따라 부모 테이블이 자동 선행 정렬되었습니다.
               </span>
             ) : (
               <span>
@@ -256,7 +266,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   ? 'ARCHITECTURE_SPEC.md 다운로드'
                   : settings.dialect === 'prisma'
                   ? 'schema.prisma 다운로드'
-                  : 'schema.sql 다운로드'}
+                  : `schema-${settings.dialect}.sql 다운로드`}
               </span>
             </button>
           </div>
