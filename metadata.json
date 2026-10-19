@@ -1,0 +1,6 @@
+{
+  "name": "SyncArch",
+  "description": "5인 개발팀을 위한 단계별 소프트웨어 아키텍처 & DB(ERD) 협업 설계 스튜디오",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
