@@ -128,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-800 text-slate-100 px-3 sm:px-4 flex items-center justify-between select-none z-30 shrink-0 gap-2 overflow-x-auto">
+    <header className="h-14 bg-slate-900 border-b border-slate-800 text-slate-100 px-2 sm:px-4 flex items-center justify-between select-none relative z-50 shrink-0 gap-2 overflow-visible">
       {/* Left: Brand, Project Switcher & Status */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
         {/* Brand */}
@@ -159,20 +159,26 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {showProjectDropdown && (
-            <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2.5 z-50 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-2 py-1.5 font-bold text-slate-300 flex items-center justify-between border-b border-slate-800 mb-1.5">
-                <span>등록된 설계 프로젝트 ({projects.length})</span>
-                <button
-                  onClick={() => {
-                    setShowProjectDropdown(false);
-                    setShowNewProjectModal(true);
-                  }}
-                  className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 text-[11px]"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>새 프로젝트</span>
-                </button>
-              </div>
+            <>
+              {/* Click-outside backdrop to dismiss dropdown */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowProjectDropdown(false)} 
+              />
+              <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2.5 z-50 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-slate-700/60">
+                <div className="px-2 py-1.5 font-bold text-slate-300 flex items-center justify-between border-b border-slate-800 mb-1.5">
+                  <span>등록된 설계 프로젝트 ({projects.length})</span>
+                  <button
+                    onClick={() => {
+                      setShowProjectDropdown(false);
+                      setShowNewProjectModal(true);
+                    }}
+                    className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 text-[11px]"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>새 프로젝트</span>
+                  </button>
+                </div>
 
               <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
                 {projects.map((proj) => {
@@ -249,6 +255,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </div>
             </div>
+            </>
           )}
         </div>
 
@@ -264,61 +271,68 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {showSnapshotMenu && (
-            <div className="absolute left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 z-50 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-100">
-              <div className="font-semibold text-slate-300 mb-2 flex items-center justify-between">
-                <span>스냅샷 히스토리</span>
-                <span className="text-[10px] text-slate-500">{snapshots.length}개 저장됨</span>
-              </div>
-              <div className="flex gap-1.5 mb-3">
-                <input
-                  type="text"
-                  placeholder="새 스냅샷 이름..."
-                  value={newSnapshotName}
-                  onChange={(e) => setNewSnapshotName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateSnapshot()}
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500"
-                />
-                <button
-                  onClick={handleCreateSnapshot}
-                  className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium text-[11px] shrink-0"
-                >
-                  저장
-                </button>
-              </div>
+            <>
+              {/* Click-outside backdrop */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowSnapshotMenu(false)} 
+              />
+              <div className="absolute left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 z-50 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-100 ring-1 ring-slate-700/60">
+                <div className="font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                  <span>스냅샷 히스토리</span>
+                  <span className="text-[10px] text-slate-500">{snapshots.length}개 저장됨</span>
+                </div>
+                <div className="flex gap-1.5 mb-3">
+                  <input
+                    type="text"
+                    placeholder="새 스냅샷 이름..."
+                    value={newSnapshotName}
+                    onChange={(e) => setNewSnapshotName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateSnapshot()}
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    onClick={handleCreateSnapshot}
+                    className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium text-[11px] shrink-0"
+                  >
+                    저장
+                  </button>
+                </div>
 
-              <div className="max-h-48 overflow-y-auto space-y-1.5 border-t border-slate-800 pt-2">
-                {snapshots.length === 0 ? (
-                  <p className="text-[11px] text-slate-500 py-1">저장된 스냅샷이 없습니다.</p>
-                ) : (
-                  snapshots.map((snap) => (
-                    <div
-                      key={snap.id}
-                      className="flex items-center justify-between p-1.5 rounded hover:bg-slate-800 group transition-colors"
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-200">{snap.name}</span>
-                        <span className="text-[10px] text-slate-500">{snap.dateStr}</span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          onRestoreSnapshot(snap.id);
-                          setShowSnapshotMenu(false);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-[10px] text-white font-medium transition-all"
+                <div className="max-h-48 overflow-y-auto space-y-1.5 border-t border-slate-800 pt-2">
+                  {snapshots.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 py-1">저장된 스냅샷이 없습니다.</p>
+                  ) : (
+                    snapshots.map((snap) => (
+                      <div
+                        key={snap.id}
+                        className="flex items-center justify-between p-1.5 rounded hover:bg-slate-800 group transition-colors"
                       >
-                        복원
-                      </button>
-                    </div>
-                  ))
-                )}
+                        <div className="flex flex-col">
+                          <span className="font-medium text-slate-200">{snap.name}</span>
+                          <span className="text-[10px] text-slate-500">{snap.dateStr}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            onRestoreSnapshot(snap.id);
+                            setShowSnapshotMenu(false);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-[10px] text-white font-medium transition-all"
+                        >
+                          복원
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Center: 4-Step Pipeline Switcher */}
-      <nav className="flex items-center bg-slate-950/70 p-1 rounded-xl border border-slate-800/80 shadow-inner shrink-0 overflow-x-auto">
+      <nav className="flex items-center bg-slate-950/70 p-0.5 sm:p-1 rounded-xl border border-slate-800/80 shadow-inner shrink-0">
         {steps.map((st) => {
           const isActive = currentStep === st.num;
           const isLocked = stepLocks[st.num];
@@ -327,14 +341,14 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               key={st.num}
               onClick={() => onChangeStep(st.num)}
-              className={`relative px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
+              className={`relative px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <span className="inline sm:hidden">{st.label}</span>
-              <span className="hidden sm:inline">{st.fullLabel}</span>
+              <span className="inline md:hidden">{st.label}</span>
+              <span className="hidden md:inline">{st.fullLabel}</span>
               {isLocked && <Lock className="w-3 h-3 text-amber-400 ml-0.5 shrink-0" />}
             </button>
           );

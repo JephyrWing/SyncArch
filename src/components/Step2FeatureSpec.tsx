@@ -39,6 +39,7 @@ interface Step2FeatureSpecProps {
   isLocked: boolean;
   sidebarWidth: number;
   onStartResize: (e: React.MouseEvent) => void;
+  onResetResize?: () => void;
   mobileTab: 'editor' | 'canvas';
   onChangeMobileTab: (tab: 'editor' | 'canvas') => void;
   isDesktop?: boolean;
@@ -76,6 +77,7 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
   isLocked,
   sidebarWidth,
   onStartResize,
+  onResetResize,
   mobileTab,
   onChangeMobileTab,
   isDesktop = true,
@@ -364,9 +366,9 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT PANEL: Resizable Feature Spec Grid & Progress Dashboard */}
         <div 
-          style={{ width: isDesktop ? `${sidebarWidth}%` : '100%' }}
+          style={isDesktop ? { width: `${sidebarWidth}%` } : undefined}
           className={`border-r border-slate-800 bg-slate-900/70 flex flex-col h-full overflow-hidden shrink-0 ${
-            mobileTab === 'editor' ? 'w-full flex' : 'hidden lg:flex'
+            isDesktop ? 'flex' : (mobileTab === 'editor' ? 'w-full flex' : 'hidden')
           }`}
         >
           {/* Header Action Bar */}
@@ -697,17 +699,17 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
         {/* Resizer Divider between Left and Right Panel */}
         <div
           onMouseDown={onStartResize}
+          onDoubleClick={onResetResize}
           className="hidden lg:flex w-1.5 hover:w-2 bg-slate-800 hover:bg-indigo-500 cursor-col-resize transition-all items-center justify-center shrink-0 group z-10 select-none"
-          title="드래그하여 사이드바 너비 조절"
+          title="드래그하여 사이드바 너비 조절 (더블클릭 시 40% 리셋)"
         >
           <div className="w-0.5 h-8 bg-slate-600 group-hover:bg-white rounded-full transition-colors" />
         </div>
 
         {/* RIGHT PANEL: API Detail & Interactive Sequence Flow Canvas */}
         <div 
-          style={{ width: isDesktop ? `${100 - sidebarWidth}%` : '100%' }}
           className={`flex-col h-full bg-slate-950/60 overflow-hidden ${
-            mobileTab === 'canvas' ? 'w-full flex' : 'hidden lg:flex'
+            isDesktop ? 'flex-1 min-w-0 flex' : (mobileTab === 'canvas' ? 'w-full flex' : 'hidden')
           }`}
         >
           {selectedFeature ? (

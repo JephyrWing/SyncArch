@@ -82,25 +82,39 @@ export default function App() {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = sidebarWidth;
+    let latestWidth = startWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const totalWidth = window.innerWidth;
       const deltaX = moveEvent.clientX - startX;
       const deltaPercent = (deltaX / totalWidth) * 100;
-      const newWidth = Math.min(65, Math.max(22, startWidth + deltaPercent));
+      const newWidth = Math.min(65, Math.max(20, startWidth + deltaPercent));
+      latestWidth = newWidth;
       setSidebarWidth(newWidth);
     };
 
     const handleMouseUp = () => {
       try {
-        localStorage.setItem('syncarch_sidebar_width', sidebarWidth.toString());
+        localStorage.setItem('syncarch_sidebar_width', latestWidth.toString());
       } catch {}
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
 
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleResetSidebarWidth = () => {
+    setSidebarWidth(40);
+    try {
+      localStorage.setItem('syncarch_sidebar_width', '40');
+    } catch {}
   };
 
   // Modals
@@ -571,6 +585,7 @@ export default function App() {
             isLocked={currentProject.stepLocks[1]}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
+            onResetResize={handleResetSidebarWidth}
             mobileTab={mobileTab}
             onChangeMobileTab={setMobileTab}
             isDesktop={isDesktop}
@@ -589,6 +604,7 @@ export default function App() {
             isLocked={currentProject.stepLocks[2]}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
+            onResetResize={handleResetSidebarWidth}
             mobileTab={mobileTab}
             onChangeMobileTab={setMobileTab}
             isDesktop={isDesktop}
@@ -611,6 +627,7 @@ export default function App() {
             isLocked={currentProject.stepLocks[3]}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
+            onResetResize={handleResetSidebarWidth}
             mobileTab={mobileTab}
             onChangeMobileTab={setMobileTab}
             isDesktop={isDesktop}
@@ -633,6 +650,7 @@ export default function App() {
             isLocked={currentProject.stepLocks[4]}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
+            onResetResize={handleResetSidebarWidth}
             mobileTab={mobileTab}
             onChangeMobileTab={setMobileTab}
             isDesktop={isDesktop}
