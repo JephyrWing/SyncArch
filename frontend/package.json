@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "start": "node server.ts",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "start": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:legacy": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

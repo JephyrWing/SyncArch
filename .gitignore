@@ -12,3 +12,4 @@ __pycache__/
 .python/
 .pytest_cache/
 backend/instance/
+.local/
