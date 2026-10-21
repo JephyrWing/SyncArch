@@ -62,6 +62,21 @@ class VersionConflict(ApplicationError):
         self.details = {"currentVersion": version}
 
 
+class DocumentValidationError(ApplicationError):
+    code = "VALIDATION_FAILED"
+    message = "문서의 필드와 참조를 확인해 주세요."
+    status = 422
+
+    def __init__(self, path, reason):
+        self.details = {"fieldErrors": [{"path": path, "message": reason}]}
+
+
+class IdempotencyKeyReused(ApplicationError):
+    code = "IDEMPOTENCY_KEY_REUSED"
+    message = "다른 요청에서 사용한 mutationId입니다. 새 mutationId를 사용해 주세요."
+    status = 409
+
+
 class UserNotFound(ApplicationError):
     code = "USER_NOT_FOUND"
     message = "추가할 수 있는 기존 사용자를 찾을 수 없습니다."

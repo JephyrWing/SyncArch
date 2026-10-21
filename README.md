@@ -5,7 +5,8 @@ React 프로토타입에 Flask + MariaDB 백엔드 기반을 추가한 프로젝
 기존 React 화면은 유지하고 기본 개발 서버는 Vite로 실행합니다.
 이전 Express/Gemini 서버는 `frontend/server.ts`에 보존하며 `npm run dev:legacy`로만 실행합니다.
 공개 DB 상태 API `/api/health`와 명시적 팀원 계정 초기화 CLI를 제공합니다.
-JWT 인증 API와 Redis RT 회전을 제공합니다. 프로젝트 업무 API와 프론트 저장 화면 연결은 후속 작업입니다.
+JWT 인증·Redis RT 회전과 프로젝트·멤버·문서 원자 저장·활동/대시보드 API를 제공합니다.
+프론트 저장 화면 연결은 W06, 실제 웹소켓 전달은 W15 후속 작업입니다.
 
 ## 구조
 
@@ -207,8 +208,60 @@ W15는 `app.services.project_events.project_changed`와 `access_revoked` 신호�
 공유 권한 함수 `services.project_access.require_access(session, actor_id, project_id, lock=True, write=True)`는 W05 저장 서비스에서도 재사용합니다.
 W15의 읽기/room 참여는 같은 정책의 `lock=False, write=False`를 사용하고 편집 허용은 `write=True`로 확인할 수 있습니다.
 
+### 문서 원자 저장·활동·대시보드 (W05)
+
+`PUT /api/projects/{pid}/document`는 Bearer AT와 현재 멤버십을 확인한 뒤
+`baseVersion`, UUID `mutationId`, `project`, `payload`를 받습니다. `project`는 생성 API와 같은
+`title`, 선택 `summary/categoryTag/targetDbms` 필드이며 대상 DBMS는 `mariadb`입니다.
+응답 `data`는 `project`, `payload`, `version`, `updatedAt`, `mutationId`, `eventId`, `replayed`,
+`normalizations`를 반환합니다. PUT 응답에는 ETag와 `Cache-Control: no-store`를 설정합니다.
+
+프로젝트→멤버십→문서 순서로 잠그고 동일 트랜잭션에서 문서 CAS·메타데이터·수정자·버전·멱등 기록·
+서버 diff 기반 활동 이력을 저장합니다. 오래된 버전은 409 `VERSION_CONFLICT/currentVersion`,
+같은 키의 다른 본문이나 다른 작성자는 409 `IDEMPOTENCY_KEY_REUSED`입니다.
+현재 권한·보관 정책을 확인한 뒤 버전 비교보다 먼저 멱등 기록을 확인합니다.
+같은 요청은 최초 정규화 응답과 같은 eventId를 돌려주며 새 이력·알림을 만들지 않습니다.
+그사이 더 최신 저장이 있어도 과거 결과를 최신 데이터로 바꾸지 않습니다.
+
+`0004`는 기존 `document_mutations`에 nullable `result_data` JSON만 추가합니다.
+기존 0001~0003과 문서·이력은 보존합니다. 이전 기록에 응답 스냅샷이 없으면 당시 버전·시각·
+알려진 eventId와 `requiresReload: true`를 반환합니다. 현재 문서를 과거 결과로 반환하지 않습니다.
+멱등 기록을 시연 중 자동 삭제하지 않습니다.
+
+요청 JSON은 UTF-8 인코딩 기준 1 MiB 이하입니다. 잘못된 구조·참조·작성자는 422
+`VALIDATION_FAILED`와 `fieldErrors[{path,message}]`, 크기 초과는 413 `DOCUMENT_TOO_LARGE`입니다.
+새 항목/댓글/컬럼 ID는 UUID이며 기존 내부 ID는 유지합니다. 같은 종류 내 중복 ID, 없는 참조,
+트리 순환·자기 부모·분류 불일치, 잘못된 enum/좌표/SQL 이름·FK 대상·자료형을 거부합니다.
+자식 `category`와 삭제·이름 변경에 영향을 받는 참조는 클라이언트가 한 문서에서 함께 갱신해야 합니다.
+접기/펼치기·탭·선택 등 개인 상태는 문서에 넣지 않습니다.
+
+새 아이디어·댓글의 `authorId`와 결정자는 인증 사용자이며 댓글 시각은 서버 UTC로 지정합니다.
+투표는 `voterIds`의 본인 ID만 추가/제거합니다. 다른 작성자의 댓글 개별 수정/삭제와 기존 작성자·
+시각 조작은 거부합니다. 과거 표시용 `author/votedBy/votes`와 상대 시각은 불변 호환 기록으로
+보존하며 실제 작성자 ID를 추측하지 않습니다. 화면의 새 투표 수는 `voterIds`에서 계산해야 합니다.
+멤버가 제외돼도 과거 작성자와 투표 기록을 유지합니다.
+
+v1 문서는 명시적 저장 때 v2로 정규화합니다. 부모 누락은 null, 형제 순서는 기존 배열 순서로
+채우고 `connection.description` 누락은 빈 문자열로 채웁니다. 기존 ID·댓글·호환 스냅샷을 유지합니다.
+`archVersions/stepLocks/currentArchVersionId`는 기존 읽기 호환만 허용하고 PUT으로 변경하지 않습니다.
+PostgreSQL 예시의 INTEGER→INT, TIMESTAMPTZ→DATETIME(정밀도 6), JSONB→JSON 및
+VARCHAR/DECIMAL의 길이·정밀도 분리를 수행하고 `normalizations`에 변환을 명시합니다.
+논리 UUID는 유지하되 MariaDB 출력 시 CHAR(36) 변환이 필요하다는 정보를 반환합니다.
+변환 안내 UI·SQL 출력 연결은 W06/W10에서 이어 갑니다. GET·복사는 기존 v1 원본을 자동 변경하지 않습니다.
+
+`GET /api/projects/{pid}/activity?beforeVersion=&limit=20`은 현재 멤버에게
+`data.items`와 `nextBeforeVersion`을 반환합니다. 최근 version·eventId 역순이며 limit 상한은 100입니다.
+활동에는 삭제된 항목의 label도 남습니다. 커밋 뒤 알림 전송 실패는 저장 성공을 취소하지 않으며
+활동 조회로 변경을 복구할 수 있습니다. 영속 이벤트 전송 큐는 추가하지 않았습니다.
+
+`GET /api/projects/{pid}/dashboard`는 같은 프로젝트 잠금 아래 같은 상태의 `version`, `counts`,
+`featureStatuses`, `progress`, `recentActivity`를 반환합니다.
+`progress`는 COMPLETED 기능 수/전체 기능 수의 백분율이며 기능 0개이면 0입니다.
+두 조회 API는 현재 객체 권한을 확인하고 `no-store`를 설정합니다.
+실제 편집 UI·충돌 비교·자동 저장은 W06, WebSocket room/presence·이벤트 전달은 W15 후속입니다.
+
 `backend/app/data/project_templates.json`은 기존 `INITIAL_PROJECTS` 두 예시의 version 1 스냅샷입니다.
-예시와 기존 v1 저장본은 읽기/복사 시 원본 JSON과 내부 ID를 보존합니다. v1→v2 정규화와 데이터형 변환은 W05에서 검증해야 합니다.
+예시와 기존 v1 저장본은 읽기/복사 시 원본 JSON과 내부 ID를 보존하고 W05의 명시적 저장 때 v2로 정규화합니다.
 편집 UI의 프로젝트/멤버 화면 연결은 W06, 실제 소켓 전송은 W15 후속이며 API 테스트 통과로 이를 완료 처리하지 않습니다.
 
 계정 준비는 마이그레이션 후 `python -m flask --app app:create_app seed-accounts`로
@@ -275,7 +328,7 @@ Flask를 실행하는 것만으로 화면 데이터가 DB에 저장되지는 않
 | `project_activity` | 생성·보관/복원·멤버 변경의 version·작업자·changes 영구 이력; W05 재사용 |
 
 UUID는 CHAR(36), MariaDB 시간은 UTC DATETIME(6), 문서 버전은 양수 BIGINT를 사용합니다.
-FK·고유 제약과 역할·버전 CHECK를 정의했습니다. 객체 권한·CAS 저장·문서 검증 서비스는 후속 구현입니다.
+FK·고유 제약과 역할·버전 CHECK를 정의했습니다. 객체 권한·CAS 저장·문서 검증은 W04/W05 서비스에 구현했습니다.
 Pydantic와 Flask-WTF는 해당 기능을 구현할 때 추가하며 현재 사용하지 않는 의존성으로 넣지 않았습니다.
 설계 화면의 SQL은 결과물이며 운영 DB에서 실행하는 API를 만들지 않습니다.
 
@@ -348,3 +401,10 @@ W04 검사도 위 공통 runner를 사용합니다. `--junitxml`에 `.local/w04-
 목록 격리·예시 복사·OWNER 보호·제외 후 404·보관/복원을 확인합니다.
 `mariadb` 표시의 행 잠금 검사 2개는 SQLite 실행에서 명시적으로 제외되고 실제 MariaDB 실행에서는 반드시 포함됩니다.
 마이그레이션 테스트는 DDL 전후 읽기 세션을 닫아 새 세션으로 확인합니다. 기존 실패 보고서를 지우지 않고 수정 후 전체 재실행합니다.
+
+W05도 같은 runner에서 결과 경로를 `.local/w05-sqlite.xml` 또는 `.local/w05-mariadb.xml`로 구분합니다.
+`test_document_schema.py`는 구조·트리·참조·기존 예시 호환을 검사하고 `test_documents.py`는
+원자 저장·멱등·작성자 보호·활동/대시보드·실제 CAS와 멤버 제외 경쟁을 검사합니다.
+`test_documents_browser.py`는 실제 Chrome 두 context에서 API 저장·409·재시도·새로고침·제외를 확인합니다.
+이는 W06 편집 UI를 검증한 결과가 아닙니다. MariaDB 재시작 검사는 W05로 저장한 네 영역·위치·
+메타데이터·버전·댓글 작성자/시각·최초 멱등 응답·활동 이력을 DB와 Flask 재시작 뒤 비교합니다.

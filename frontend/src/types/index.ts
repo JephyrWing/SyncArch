@@ -16,6 +16,8 @@ export type DecisionStatus = 'ACCEPTED' | 'REVIEW' | 'DEFERRED' | 'REJECTED';
 
 export interface IdeaComment {
   id: string;
+  // 서버가 확정한 작성자 ID와 UTC 시각을 사용하고 기존 표시 이름은 호환합니다.
+  authorId?: string;
   author: string;
   text: string;
   createdAt: string;
@@ -23,6 +25,11 @@ export interface IdeaComment {
 
 export interface IdeaCard {
   id: string;
+  // v2 저장 계약입니다. 펼침·선택 상태는 공유 문서에 넣지 않습니다.
+  parentIdeaId?: string | null;
+  siblingOrder?: number;
+  authorId?: string;
+  voterIds?: string[];
   category: IdeaCategory;
   title: string;
   description: string;
@@ -45,6 +52,7 @@ export type FeatureProgressStatus = 'PLANNED' | 'IN_PROGRESS' | 'QA' | 'COMPLETE
 
 export interface FeatureSpec {
   id: string; // e.g. FEAT-01
+  displayCode?: string;
   domain: string;
   name: string;
   priority: PriorityLevel;
@@ -82,6 +90,7 @@ export interface ArchConnection {
   targetId: string;
   protocol: ArchProtocol;
   label?: string;
+  description?: string;
 }
 
 export interface ArchVersion {
@@ -98,6 +107,10 @@ export interface ErdColumn {
   id: string;
   name: string;
   dataType: string;
+  // VARCHAR 길이, DECIMAL/DATETIME 정밀도는 자료형과 분리해 저장합니다.
+  length?: number;
+  precision?: number;
+  scale?: number;
   isPrimaryKey: boolean;
   isForeignKey: boolean;
   references?: string; // e.g. "users.id"

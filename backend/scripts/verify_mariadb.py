@@ -132,6 +132,7 @@ def main():
             db.session.add(project)
             db.session.flush()
             project_id = project.id
+            restart_actor_id = user.id
             db.session.add(ProjectDocument(project_id=project_id, updated_by=user.id,
                                             payload={"schemaVersion": 1, "marker": "재시작 보존 🚀"}))
             db.session.commit()
@@ -144,6 +145,26 @@ def main():
         finally:
             os.environ.pop("SEED_ACCOUNT_PASSWORDS", None)
         assert seeded.exit_code == 0
+        # 실제 W05 저장 결과·멱등 응답·활동 이력을 DB와 Flask 재시작 뒤 대조합니다.
+        from app.schemas.document_schema import save_input
+        from app.services import project_service, document_service
+        with app.app_context():
+            saved_project = project_service.create_project(db.session.session_factory, restart_actor_id,
+                {"title": "W05 재시작 전"})
+            idea_id, feature_id, client_id, server_id = (str(uuid4()) for _ in range(4))
+            restart_request = {"baseVersion": 1, "mutationId": str(uuid4()),
+                "project": {"title": "W05 저장 보존", "summary": "한글 🚀"},
+                "payload": {"schemaVersion": 2, "ideas": [{"id": idea_id, "title": "영구 기록",
+                    "category": "problems_goals", "comments": [{"id": str(uuid4()), "text": "재시작 뒤에도 동일"}]}],
+                    "features": [{"id": feature_id, "name": "재시작 기능", "status": "COMPLETED", "relatedStoryId": idea_id}],
+                    "nodes": [{"id": client_id, "name": "화면", "category": "Client", "x": 20, "y": 30},
+                              {"id": server_id, "name": "서버", "category": "Service", "x": 200, "y": 300}],
+                    "connections": [{"id": str(uuid4()), "sourceId": client_id, "targetId": server_id, "protocol": "REST", "description": "영구 연결"}],
+                    "tables": [{"id": str(uuid4()), "name": "restart_check", "relatedFeatureIds": [feature_id],
+                        "x": 40, "y": 60, "columns": [{"id": str(uuid4()), "name": "id", "dataType": "INT", "isPrimaryKey": True}]}]}}
+            restart_fields, restart_conversions = save_input(restart_request)
+            restart_result = document_service.save_document(db.session.session_factory, restart_actor_id,
+                saved_project["id"], restart_fields, restart_conversions)
         with app.app_context():
             from sqlalchemy import select
             accounts_before = {user.login_id: (user.id, user.password_hash) for user in
@@ -160,12 +181,22 @@ def main():
             assert document.version == 1
             assert {user.login_id: (user.id, user.password_hash) for user in
                     db.session.scalars(select(AppUser).where(AppUser.login_id.in_(ACCOUNTS)))} == accounts_before
+            restored = project_service.get_document(db.session.session_factory, restart_actor_id, saved_project["id"])
+            assert restored["payload"] == restart_result["payload"] and restored["version"] == 2
+            assert restored["project"]["title"] == "W05 저장 보존"
+            replay = document_service.save_document(db.session.session_factory, restart_actor_id,
+                saved_project["id"], restart_fields, restart_conversions)
+            assert replay == {**restart_result, "replayed": True}
+            dashboard = document_service.get_dashboard(db.session.session_factory, restart_actor_id, saved_project["id"])
+            assert dashboard["version"] == 2 and dashboard["recentActivity"][0]["eventId"] == restart_result["eventId"]
+            assert dashboard["progress"] == 100 and dashboard["counts"]["tables"] == 1
             db.session.remove()
             db.engine.dispose()
         result = restarted_app.test_cli_runner().invoke(args=["db-check"])
         assert result.exit_code == 0
         assert restarted_app.test_client().get("/api/health").json == {"data": {"status": "ok", "database": "ok"}}
         print("PASS: DB restart, fresh Flask app, JSON/account/hash persistence, health and db-check", flush=True)
+        print("PASS: W05 committed document/metadata/version/mutation result/activity survive DB and app restart", flush=True)
     finally:
         try:
             if process is not None and process.poll() is None:
