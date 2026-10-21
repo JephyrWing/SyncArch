@@ -11,4 +11,5 @@ class DocumentMutation(db.Model):
     request_hash = db.Column(db.CHAR(64), nullable=False)
     result_version = db.Column(VERSION, nullable=False)
     result_updated_at = db.Column(DATETIME, nullable=False)
+    result_data = db.Column(db.JSON)
     created_at = db.Column(DATETIME, nullable=False, default=utc_now)

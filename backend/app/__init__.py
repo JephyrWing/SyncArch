@@ -27,10 +27,12 @@ def create_app(test_config=None):
     from .routes.auth import auth
     from .routes.projects import projects
     from .routes.members import members
+    from .routes.documents import documents
     app.register_blueprint(health)
     app.register_blueprint(auth)
     app.register_blueprint(projects)
     app.register_blueprint(members)
+    app.register_blueprint(documents)
     register_error_handlers(app)
 
     return app
