@@ -18,7 +18,6 @@ frontend/
   tsconfig.json              TypeScript 설정
   index.html                 React 진입 HTML
   .env.example               기존 프론트엔드 개발 서버 환경변수 예제
-  .aistudio/                 기존 프로토타입 생성 도구 산출물
 backend/
   app/
     __init__.py              Flask 앱 팩토리와 구성 등록
@@ -39,6 +38,13 @@ backend/
   wsgi.py                    WSGI 실행 진입점
 compose.yaml                 로컬 개발용 MariaDB
 ```
+
+`.env`·개인 키, Python/npm 실행 환경·캐시, 빌드·테스트 결과, Flask `instance/`,
+격리 DB와 검증 증빙을 보관하는 `.local/`은 Git에서 제외합니다.
+AI Studio 임시 산출물(`.aistudio/`)과 기존 `frontend/dropdown-test.png`도 로컬 파일로만 유지합니다.
+환경변수 예제(`.env.example`, `.env.*.example`, `*.env.example`), `package-lock.json`,
+고정 requirements, 마이그레이션, 프로젝트 템플릿 JSON, 소스·테스트 코드는 계속 Git에서 관리합니다.
+공유할 SQL·JSON·이미지와 테스트 fixture는 확장자 전체를 제외하지 않고 필요한 파일을 명시해 추가합니다.
 
 ## 실행 (Windows PowerShell)
 
