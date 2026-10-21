@@ -9,6 +9,15 @@ from app import create_app
 from app.extensions import db
 
 
+def pytest_collection_modifyitems(config, items):
+    if not os.getenv("TEST_DATABASE_URL", "").startswith(("mysql", "mariadb")):
+        selected = [item for item in items if "mariadb" not in item.keywords]
+        deselected = [item for item in items if "mariadb" in item.keywords]
+        items[:] = selected
+        if deselected:
+            config.hook.pytest_deselected(items=deselected)
+
+
 @pytest.fixture(autouse=True)
 def isolated_environment(monkeypatch):
     monkeypatch.setattr("app.config.load_dotenv", lambda *args, **kwargs: False)

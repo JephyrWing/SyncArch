@@ -36,10 +36,43 @@ class CsrfFailed(ApplicationError):
     status = 400
 
 
+class ProjectNotFound(ApplicationError):
+    code = "NOT_FOUND"
+    message = "프로젝트를 찾을 수 없습니다."
+    status = 404
+
+
+class Forbidden(ApplicationError):
+    code = "FORBIDDEN"
+    message = "이 작업을 수행할 권한이 없습니다."
+    status = 403
+
+
+class ProjectArchived(Forbidden):
+    code = "PROJECT_ARCHIVED"
+    message = "보관된 프로젝트는 변경할 수 없습니다."
+
+
+class VersionConflict(ApplicationError):
+    code = "VERSION_CONFLICT"
+    message = "프로젝트 버전이 변경되었습니다. 최신 문서를 확인해 주세요."
+    status = 409
+
+    def __init__(self, version):
+        self.details = {"currentVersion": version}
+
+
+class UserNotFound(ApplicationError):
+    code = "USER_NOT_FOUND"
+    message = "추가할 수 있는 기존 사용자를 찾을 수 없습니다."
+    status = 404
+
+
 def register_error_handlers(app):
     @app.errorhandler(ApplicationError)
     def application_error(error):
-        return jsonify(error={"code": error.code, "message": error.message}), error.status
+        return jsonify(error={"code": error.code, "message": error.message,
+                              **getattr(error, "details", {})}), error.status
 
     @app.errorhandler(HTTPException)
     def http_error(error):

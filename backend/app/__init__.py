@@ -25,8 +25,12 @@ def create_app(test_config=None):
     from .errors import register_error_handlers
     from .routes.health import health
     from .routes.auth import auth
+    from .routes.projects import projects
+    from .routes.members import members
     app.register_blueprint(health)
     app.register_blueprint(auth)
+    app.register_blueprint(projects)
+    app.register_blueprint(members)
     register_error_handlers(app)
 
     return app
