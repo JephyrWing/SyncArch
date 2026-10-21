@@ -20,6 +20,4 @@ def init_auth(app):
     app.extensions["token_repository"] = TokenRepository(client, app.config["REDIS_KEY_PREFIX"])
     register_jwt_callbacks(jwt, app)
     from .services.google_provider import GoogleProvider
-    from .services.mail_service import SmtpMailer
     app.extensions["google_provider"] = GoogleProvider(app.config)
-    app.extensions["verification_mailer"] = SmtpMailer(app.config)

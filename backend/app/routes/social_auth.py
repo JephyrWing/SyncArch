@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from flask import Blueprint, current_app, jsonify, redirect, request
 from flask_jwt_extended import get_jwt, jwt_required, set_refresh_cookies
+from werkzeug.exceptions import BadRequest, NotFound
 
 from ..auth import actor_from_claims, token_repository
 from ..errors import AuthenticationUnavailable, CsrfFailed, GoogleAuthenticationFailed
@@ -60,6 +61,8 @@ def current_actor():
 def origin():
     if request.method == "POST" and request.headers.get("Origin") not in current_app.config["ALLOWED_ORIGINS"]:
         raise CsrfFailed()
+    if request.method == "POST" and not request.is_json:
+        raise BadRequest("JSON 요청이 필요합니다.")
 
 
 @social_auth.after_request
@@ -76,7 +79,7 @@ def privacy(response):
 @social_auth.get("/options")
 def options():
     return jsonify(data={"google": {"enabled": current_app.config["GOOGLE_OAUTH_ENABLED"]},
-        "emailVerification": {"enabled": current_app.extensions["verification_mailer"].available}})
+        "emailRegistration": {"enabled": True}})
 
 
 def start_response(actor=None, claims=None):
@@ -125,21 +128,17 @@ def callback():
     return response
 
 
+@social_auth.post("/email")
+@jwt_required(locations=["headers"])
+def email_save():
+    address, password = schema.email_input(request.get_json())
+    actor, claims = current_actor()
+    return jsonify(data=service.save_email(db.session.session_factory, token_repository(),
+        user_id=actor.id, session_id=claims["sid"], password=password, address=address))
+
+
 @social_auth.post("/email/start")
-@jwt_required(locations=["headers"])
-def email_start():
-    address, password = schema.email_start(request.get_json())
-    actor, claims = current_actor()
-    return jsonify(data=service.begin_email(db.session.session_factory, token_repository(), states(),
-        current_app.extensions["verification_mailer"], user_id=actor.id, session_id=claims["sid"],
-        password=password, address=address, secret=current_app.config["JWT_SECRET_KEY"]))
-
-
 @social_auth.post("/email/verify")
-@jwt_required(locations=["headers"])
-def email_verify():
-    challenge, code = schema.email_verify(request.get_json())
-    actor, claims = current_actor()
-    return jsonify(data=service.verify_email(db.session.session_factory, token_repository(), states(),
-        user_id=actor.id, session_id=claims["sid"], challenge=challenge, code=code,
-        secret=current_app.config["JWT_SECRET_KEY"]))
+def email_verification_removed():
+    # 이전 UI의 메일 인증 호출은 어떤 상태도 소비하지 않고 명확히 거부합니다.
+    raise NotFound()

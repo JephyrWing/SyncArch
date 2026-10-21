@@ -138,6 +138,9 @@ def main():
             user.email_verified_at = utc_now()
             db.session.add(UserIdentity(user_id=user.id, provider="google", subject="RestartSubject_A",
                                         email="restart-check@gmail.com", email_verified=True))
+            # 자체 이메일 인증 없는 새 등록값과 과거 검증 이력을 함께 보존합니다.
+            db.session.add(AppUser(login_id="mvp-email-restart", display_name="직접 이메일 보존", password_hash="!disabled",
+                email="Direct@GMAIL.com", email_normalized="direct@gmail.com"))
             db.session.add(ProjectDocument(project_id=project_id, updated_by=user.id,
                                             payload={"schemaVersion": 1, "marker": "재시작 보존 🚀"}))
             db.session.commit()
@@ -188,6 +191,9 @@ def main():
             assert restart_user.email_normalized == "restart-check@gmail.com" and restart_user.email_verified_at is not None
             identity = db.session.scalar(select(UserIdentity).where(UserIdentity.user_id == restart_actor_id))
             assert identity.subject == "RestartSubject_A" and identity.email_verified is True
+            direct_user = db.session.scalar(select(AppUser).where(AppUser.login_id == "mvp-email-restart"))
+            assert direct_user.email == "Direct@GMAIL.com" and direct_user.email_normalized == "direct@gmail.com"
+            assert direct_user.email_verified_at is None
             assert {user.login_id: (user.id, user.password_hash) for user in
                     db.session.scalars(select(AppUser).where(AppUser.login_id.in_(ACCOUNTS)))} == accounts_before
             restored = project_service.get_document(db.session.session_factory, restart_actor_id, saved_project["id"])
@@ -207,6 +213,7 @@ def main():
         print("PASS: DB restart, fresh Flask app, JSON/account/hash persistence, health and db-check", flush=True)
         print("PASS: W05 committed document/metadata/version/mutation result/activity survive DB and app restart", flush=True)
         print("PASS: W03 verified email and Google subject/user identity survive DB and app restart", flush=True)
+        print("PASS: W03 direct email without local verification and legacy timestamp survive DB and app restart", flush=True)
     finally:
         try:
             if process is not None and process.poll() is None:

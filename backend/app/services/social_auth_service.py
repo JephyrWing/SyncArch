@@ -1,16 +1,12 @@
-"""Google 연결·기존 검증 이메일·일회 challenge의 업무와 DB 트랜잭션입니다."""
-import hmac
-from hashlib import sha256
+"""Google 연결·본인 재인증 후 이메일 저장의 업무와 DB 트랜잭션입니다."""
 import re
 import secrets
 from time import time
-from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from ..errors import (AuthenticationRequired, AuthenticationUnavailable, GoogleAuthenticationFailed,
+from ..errors import (AuthenticationRequired, GoogleAuthenticationFailed,
     GoogleLinkRequired, IdentityConflict)
-from ..models import utc_now
 from ..repositories import identity_repository as identities
 from ..repositories.auth_state_repository import digest
 from ..schemas.social_schema import normalize_email
@@ -89,7 +85,7 @@ def connect_identity(session_factory, tokens, profile, *, user_id=None, session_
                     raise AuthenticationRequired()
             elif known is None:
                 normalized = authoritative_email(profile)
-                if not normalized or not user.email_verified_at or user.email_normalized != normalized:
+                if not normalized or user.email_normalized != normalized:
                     raise GoogleLinkRequired()
             if known is None:
                 identities.insert(session, user.id, profile)
@@ -121,38 +117,17 @@ def finish_google(session_factory, tokens, states, provider, *, state, binding, 
     return actor, record["purpose"]
 
 
-def code_hash(secret, challenge, code):
-    return hmac.new(secret.encode(), (challenge + ":" + code).encode(), sha256).hexdigest()
-
-
-def begin_email(session_factory, tokens, states, mailer, *, user_id, session_id, password, address, secret):
+def save_email(session_factory, tokens, *, user_id, session_id, password, address):
     reauthenticate(session_factory, tokens, user_id, session_id, password)
-    if not mailer.available:
-        raise AuthenticationUnavailable()
     address, normalized = normalize_email(address)
-    challenge, code = str(uuid4()), f"{secrets.randbelow(1000000):06d}"
-    states.create_email(challenge, {"userId": user_id, "sessionId": session_id, "email": address,
-        "normalized": normalized, "codeHash": code_hash(secret, challenge, code), "active": False, "attempts": 0})
-    try:
-        mailer.send_code(address, code)
-        states.activate_email(challenge)
-    except Exception:
-        states.discard_email(challenge)
-        raise
-    return {"challengeId": challenge, "expiresIn": 600}
-
-
-def verify_email(session_factory, tokens, states, *, user_id, session_id, challenge, code, secret):
-    resolve_actor(session_factory, tokens, user_id, session_id)
-    record = states.consume_email(challenge, user_id, session_id, code_hash(secret, challenge, code))
     try:
         with session_factory.begin() as session:
             user = identities.user_by_id(session, user_id)
             _actor(user)
             if not tokens.is_active(session_id, user_id):
                 raise AuthenticationRequired()
-            identities.set_email(user, record["email"], record["normalized"], utc_now())
+            identities.set_email(user, address, normalized)
             session.flush()
-            return {"email": user.email, "verified": True}
+            return {"email": user.email}
     except (IntegrityError, OperationalError) as error:
         _conflict(error)

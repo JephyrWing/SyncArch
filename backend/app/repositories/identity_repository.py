@@ -28,5 +28,6 @@ def insert(session, user_id, profile):
     return record
 
 
-def set_email(user, address, normalized, verified_at):
-    user.email, user.email_normalized, user.email_verified_at = address, normalized, verified_at
+def set_email(user, address, normalized):
+    # 과거 email_verified_at는 보존하며 현재 주소의 인증 여부로 사용하지 않습니다.
+    user.email, user.email_normalized = address, normalized
