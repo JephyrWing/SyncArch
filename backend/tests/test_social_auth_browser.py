@@ -2,14 +2,13 @@
 import json
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from test_auth_browser import browser_session, open_page
-from test_auth import auth_app
-from test_social_auth import google_app, signer, certificate_transport, state_repository, verified_user
+from test_auth_browser import browser_session, open_page, sign_in
+from test_auth import auth_app, PASSWORD
+from test_social_auth import google_app, signer, certificate_transport, state_repository
 
 
 def test_browser_provider_fixture_redirect_cookie_and_memory_recovery(google_app, browser_session):
     app = google_app.app
-    verified_user(app)
     browser, origin = browser_session
     app.config["AUTH_FRONTEND_ORIGIN"] = origin
     app.extensions["google_provider"].redirect_uri = origin + "/api/auth/google/callback"
@@ -17,6 +16,10 @@ def test_browser_provider_fixture_redirect_cookie_and_memory_recovery(google_app
     context = browser.new_context()
     try:
         page = open_page(context, origin)
+        assert sign_in(page) == "검증 A"
+        saved = page.evaluate("password => fetch('/api/auth/email', {method:'POST',headers:{...window.auth.authorization(),'Content-Type':'application/json'},body:JSON.stringify({email:'Owner@GMAIL.com',password})}).then(async r=>({status:r.status,body:await r.json()}))", PASSWORD)
+        assert saved == {"status": 200, "body": {"data": {"email": "Owner@GMAIL.com"}}}
+        page.evaluate("() => window.auth.logout()")
         data = page.evaluate("() => fetch('/api/auth/google/start', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(r=>r.data)")
         params = parse_qs(urlsplit(data["authorizationUrl"]).query)
         state = params["state"][0]

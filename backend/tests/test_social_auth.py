@@ -99,10 +99,12 @@ def state_repository(app):
     return AuthStateRepository(tokens.client, tokens.prefix)
 
 
-def verified_user(app, email="owner@gmail.com"):
+def registered_user(app, email="owner@gmail.com", *, legacy_verified=False):
     with app.app_context():
         user = db.session.get(AppUser, app.config["TEST_AUTH_USER"])
-        user.email, user.email_normalized, user.email_verified_at = *normalize_email(email), utc_now()
+        if email is not None:
+            user.email, user.email_normalized = normalize_email(email)
+        user.email_verified_at = utc_now() if legacy_verified else None
         db.session.commit()
         return user.id, user.password_hash
 
@@ -136,7 +138,7 @@ def identity_rows(app):
 
 def test_google_authoritative_email_links_preserving_account_and_recovers_with_existing_refresh(google_app):
     fixture, app = google_app, google_app.app
-    uid, password_hash = verified_user(app, "Owner@GMAIL.com")
+    uid, password_hash = registered_user(app, "Owner@GMAIL.com")
     original = app.test_client()
     original_headers = bearer(login(original).json["data"]["accessToken"])
     project = original.post("/api/projects", json={"title": "Google 연결 전 문서"}, headers=original_headers).json["data"]
@@ -165,13 +167,14 @@ def test_google_authoritative_email_links_preserving_account_and_recovers_with_e
     ("owner@workspace.example", {"email": "owner@workspace.example", "hd": "workspace.example"}, True, 303),
     ("owner@outside.example", {"email": "owner@outside.example"}, True, 409),
     ("owner@gmail.com", {"email_verified": False}, True, 409),
-    ("owner@gmail.com", {}, False, 409),
+    ("owner@gmail.com", {}, False, 303),
+    (None, {}, False, 409),
     ("other@gmail.com", {}, True, 409),
     ("owner@workspace.example", {"email": "owner@workspace.example", "hd": "another.example"}, True, 409),
 ])
-def test_auto_link_requires_both_verified_app_email_and_google_authority(google_app, email, profile, verified, expected):
+def test_auto_link_requires_google_authority_and_unique_registered_email(google_app, email, profile, verified, expected):
     app = google_app.app
-    uid, _ = verified_user(app, email)
+    uid, _ = registered_user(app, email, legacy_verified=verified)
     if not verified:
         with app.app_context():
             db.session.get(AppUser, uid).email_verified_at = None
@@ -187,7 +190,7 @@ def test_auto_link_requires_both_verified_app_email_and_google_authority(google_
 
 def test_existing_subject_has_priority_over_email_and_disabled_account_stays_denied(google_app):
     app = google_app.app
-    uid, _ = verified_user(app)
+    uid, _ = registered_user(app)
     client = app.test_client()
     assert callback(client, start_google(google_app, client)).status_code == 303
     google_app.profile = {"email": "changed@outside.example", "email_verified": False}
@@ -246,7 +249,7 @@ def test_link_callback_revalidates_original_actor_after_provider_response(google
 
 def test_oauth_state_binding_cancellation_expiry_replay_and_duplicate_parameters(google_app):
     app = google_app.app
-    verified_user(app)
+    registered_user(app)
     client, attacker = app.test_client(), app.test_client()
     state = start_google(google_app, client)
     assert callback(attacker, state).status_code == 401
@@ -293,7 +296,7 @@ def test_multitab_binding_requires_restart_without_account_linking(google_app):
 
 @pytest.mark.parametrize("failure,expected", [(400, 401), (500, 503), (429, 503)])
 def test_provider_failure_consumes_state_without_partial_identity_or_tokens(google_app, failure, expected):
-    verified_user(google_app.app)
+    registered_user(google_app.app)
     google_app.fail = failure
     client = google_app.app.test_client()
     assert callback(client, start_google(google_app, client)).status_code == expected
@@ -303,7 +306,7 @@ def test_provider_failure_consumes_state_without_partial_identity_or_tokens(goog
 
 def test_redis_failure_before_and_after_identity_commit_is_fail_closed(google_app):
     app = google_app.app
-    verified_user(app)
+    registered_user(app)
     client = app.test_client()
     tokens = app.extensions["token_repository"]
     with patch.object(tokens.client, "set", side_effect=ConnectionError("private-redis-secret")):
@@ -319,7 +322,7 @@ def test_redis_failure_before_and_after_identity_commit_is_fail_closed(google_ap
 
 def test_identity_database_failure_rolls_back_without_new_session(google_app):
     app = google_app.app
-    verified_user(app)
+    registered_user(app)
     client = app.test_client()
     state = start_google(google_app, client)
     with patch.object(identity_repository, "insert", side_effect=SQLAlchemyError("fixture-only failure")):
@@ -353,152 +356,146 @@ def test_official_verifier_rejects_forged_signature_and_certificate_failure(sign
 
 @pytest.fixture
 def email_client(auth_app):
-    mailer = SimpleNamespace(available=True, sent=[])
-    mailer.send_code = lambda address, code: mailer.sent.append((address, code))
-    auth_app.extensions["verification_mailer"] = mailer
     client = auth_app.test_client()
     headers = {"Origin": ORIGIN, **bearer(login(client).json["data"]["accessToken"])}
-    return auth_app, client, headers, mailer
+    return auth_app, client, headers
 
 
-def email_start(fixture, address=" Owner@GMAIL.com "):
-    app, client, headers, mailer = fixture
-    return client.post("/api/auth/email/start", json={"email": address, "password": PASSWORD}, headers=headers)
+def save_email(fixture, address=" Owner@GMAIL.com ", password=PASSWORD):
+    _, client, headers = fixture
+    return client.post("/api/auth/email", json={"email": address, "password": password}, headers=headers)
 
 
-def email_verify(fixture, challenge, code):
-    _, client, headers, _ = fixture
-    return client.post("/api/auth/email/verify", json={"challengeId": challenge, "code": code}, headers=headers)
-
-
-def test_email_verification_stores_only_hash_and_becomes_eligible_for_auto_link(email_client):
-    app, client, headers, mailer = email_client
-    response = email_start(email_client)
-    assert response.status_code == 200
-    data = response.json["data"]
-    assert set(data) == {"challengeId", "expiresIn"} and data["expiresIn"] == 600
-    challenge, code = data["challengeId"], mailer.sent[0][1]
-    states = state_repository(app)
-    raw = states.client.get(states.email_key(challenge))
-    record = json.loads(raw)
-    assert code not in raw and record["codeHash"] != code and record["active"] is True
-    assert record["normalized"] == "owner@gmail.com" and 0 < states.client.ttl(states.email_key(challenge)) <= 600
+def test_direct_email_save_and_update_preserves_account_and_creates_no_challenge(email_client):
+    app, client, headers = email_client
+    uid = app.config["TEST_AUTH_USER"]
     with app.app_context():
-        user = db.session.get(AppUser, app.config["TEST_AUTH_USER"])
-        assert user.email_verified_at is None
-        password_hash = user.password_hash
-    verified = email_verify(email_client, challenge, code)
-    assert verified.status_code == 200 and verified.json["data"] == {"email": "Owner@GMAIL.com", "verified": True}
-    assert email_verify(email_client, challenge, code).status_code == 400
+        original_hash = db.session.get(AppUser, uid).password_hash
+    assert save_email(email_client).json == {"data": {"email": "Owner@GMAIL.com"}}
+    assert save_email(email_client, "next@gmail.com").json == {"data": {"email": "next@gmail.com"}}
     with app.app_context():
-        user = db.session.get(AppUser, app.config["TEST_AUTH_USER"])
-        assert user.email_verified_at is not None and user.email_normalized == "owner@gmail.com"
-        assert user.password_hash == password_hash
-    assert client.get("/api/auth/me", headers=headers).status_code == 200
-
-
-def test_email_attempt_cap_expiry_and_resend_throttle(email_client):
-    app, _, _, mailer = email_client
-    challenge = email_start(email_client).json["data"]["challengeId"]
-    code = mailer.sent[0][1]
-    assert email_start(email_client).status_code == 429
-    wrong = "000000" if code != "000000" else "000001"
-    for _ in range(5):
-        assert email_verify(email_client, challenge, wrong).status_code == 400
-    assert email_verify(email_client, challenge, code).status_code == 400
+        user = db.session.get(AppUser, uid)
+        assert user.email_normalized == "next@gmail.com" and user.email_verified_at is None
+        assert user.password_hash == original_hash
     states = state_repository(app)
-    states.client.delete(states.prefix + "auth:email:cooldown:" + app.config["TEST_AUTH_USER"])
-    challenge = email_start(email_client).json["data"]["challengeId"]
-    states.client.expire(states.email_key(challenge), 0)
-    assert email_verify(email_client, challenge, mailer.sent[-1][1]).status_code == 400
+    assert list(states.client.scan_iter(match=states.prefix + "auth:email:*")) == []
+    assert "verification_mailer" not in app.extensions
+    assert client.get("/api/auth/me", headers=headers).json["data"]["id"] == uid
 
 
-def test_email_challenge_is_bound_to_user_and_original_session(email_client):
-    app, client, headers, mailer = email_client
-    challenge = email_start(email_client).json["data"]["challengeId"]
-    code = mailer.sent[0][1]
-    other = app.test_client()
-    for login_id in ("auth-b", "auth-a"):
-        token = login(other, loginId=login_id).json["data"]["accessToken"]
-        response = other.post("/api/auth/email/verify", json={"challengeId": challenge, "code": code},
-            headers={"Origin": ORIGIN, **bearer(token)})
-        assert response.status_code == 400
-    assert email_verify(email_client, challenge, code).status_code == 200
-
-
-def test_email_smtp_unavailable_failure_and_reauthentication_never_verify(email_client):
-    app, client, headers, mailer = email_client
-    bad = client.post("/api/auth/email/start", json={"email": "owner@gmail.com", "password": "wrong"}, headers=headers)
-    assert bad.status_code == 401 and mailer.sent == []
-    mailer.available = False
-    assert email_start(email_client).status_code == 503
-    assert client.get("/api/auth/options").json["data"]["emailVerification"]["enabled"] is False
-    mailer.available = True
-    mailer.send_code = lambda *args: (_ for _ in ()).throw(AuthenticationUnavailable())
-    assert email_start(email_client).status_code == 503
-    states = state_repository(app)
-    keys = list(states.client.scan_iter(match=states.prefix + "auth:email:*"))
-    assert all(":cooldown:" in key for key in keys)
+def test_direct_email_becomes_google_auto_link_candidate_without_local_verification(google_app):
+    app = google_app.app
+    client = app.test_client()
+    headers = {"Origin": ORIGIN, **bearer(login(client).json["data"]["accessToken"])}
+    assert save_email((app, client, headers)).status_code == 200
     with app.app_context():
         assert db.session.get(AppUser, app.config["TEST_AUTH_USER"]).email_verified_at is None
+    google_client = app.test_client()
+    assert callback(google_client, start_google(google_app, google_client)).status_code == 303
+    assert identity_rows(app)[0][0] == app.config["TEST_AUTH_USER"]
 
 
-def test_email_duplicate_address_rolls_back_and_pending_challenge_cannot_be_verified(email_client):
-    app, _, _, mailer = email_client
+def test_direct_email_update_preserves_legacy_timestamp_and_identity(google_app):
+    app = google_app.app
+    uid, _ = registered_user(app, legacy_verified=True)
+    client = app.test_client()
+    assert callback(client, start_google(google_app, client)).status_code == 303
+    before = identity_rows(app)
     with app.app_context():
-        user = db.session.scalar(select(AppUser).where(AppUser.login_id == "auth-b"))
-        user.email = user.email_normalized = "owner@gmail.com"
-        user.email_verified_at = utc_now()
-        db.session.commit()
-    challenge = email_start(email_client).json["data"]["challengeId"]
-    states = state_repository(app)
-    key = states.email_key(challenge)
-    record = json.loads(states.client.get(key))
-    record["active"] = False
-    states.client.set(key, json.dumps(record), ex=600)
-    code = mailer.sent[0][1]
-    assert email_verify(email_client, challenge, code).status_code == 400
-    states.activate_email(challenge)
-    assert email_verify(email_client, challenge, code).status_code == 409
+        stamp = db.session.get(AppUser, uid).email_verified_at
+    headers = {"Origin": ORIGIN, **bearer(login(client).json["data"]["accessToken"])}
+    assert save_email((app, client, headers), "new@gmail.com").status_code == 200
     with app.app_context():
-        assert db.session.get(AppUser, app.config["TEST_AUTH_USER"]).email_normalized is None
+        assert db.session.get(AppUser, uid).email_verified_at == stamp
+    assert identity_rows(app) == before
+    google_app.profile = {"email": "changed@outside.example", "email_verified": False}
+    assert callback(client, start_google(google_app, client)).status_code == 303
+    assert refresh(client).json["data"]["user"]["id"] == uid
 
 
-def test_email_verification_requires_active_session_and_rolls_back_database_failure(email_client):
-    app, client, headers, mailer = email_client
-    challenge = email_start(email_client).json["data"]["challengeId"]
-    with patch.object(identity_repository, "set_email", side_effect=SQLAlchemyError("fixture-only")):
-        assert email_verify(email_client, challenge, mailer.sent[0][1]).status_code == 503
-    assert email_verify(email_client, challenge, mailer.sent[0][1]).status_code == 400
-    with app.app_context():
-        assert db.session.get(AppUser, app.config["TEST_AUTH_USER"]).email_verified_at is None
-    states = state_repository(app)
-    states.client.delete(states.prefix + "auth:email:cooldown:" + app.config["TEST_AUTH_USER"])
-    challenge = email_start(email_client).json["data"]["challengeId"]
+def test_direct_email_requires_password_origin_and_active_session(email_client):
+    app, client, headers = email_client
+    assert save_email(email_client, password="wrong").status_code == 401
+    assert app.test_client().post("/api/auth/email", json={"email": "owner@gmail.com", "password": PASSWORD}, headers={"Origin": ORIGIN}).status_code == 401
+    for origin in (None, "null", "https://evil.example"):
+        forged = {key: value for key, value in headers.items() if key != "Origin"}
+        if origin is not None:
+            forged["Origin"] = origin
+        assert client.post("/api/auth/email", json={"email": "owner@gmail.com", "password": PASSWORD}, headers=forged).status_code == 400
     assert client.post("/api/auth/logout", headers={"Origin": ORIGIN, "X-CSRF-TOKEN": csrf(client)}).status_code == 200
-    assert email_verify(email_client, challenge, mailer.sent[-1][1]).status_code == 401
+    assert save_email(email_client).status_code == 401
+    with app.app_context():
+        assert db.session.get(AppUser, app.config["TEST_AUTH_USER"]).email is None
 
 
-def test_email_challenge_consumption_is_atomic_on_real_redis(email_client):
-    app, _, headers, mailer = email_client
-    challenge = email_start(email_client).json["data"]["challengeId"]
+def test_direct_email_duplicate_and_database_failure_roll_back(email_client):
+    app, _, _ = email_client
+    assert save_email(email_client, "original@gmail.com").status_code == 200
+    with app.app_context():
+        other = db.session.scalar(select(AppUser).where(AppUser.login_id == "auth-b"))
+        other.email = other.email_normalized = "taken@gmail.com"
+        db.session.commit()
+    assert save_email(email_client, "TAKEN@gmail.com").status_code == 409
+    original = identity_repository.set_email
+    def fail_after_assignment(*args):
+        original(*args)
+        raise SQLAlchemyError("fixture-only")
+    with patch.object(identity_repository, "set_email", side_effect=fail_after_assignment):
+        assert save_email(email_client, "failed@gmail.com").status_code == 503
+    with app.app_context():
+        user = db.session.get(AppUser, app.config["TEST_AUTH_USER"])
+        assert user.email == user.email_normalized == "original@gmail.com"
+
+
+def test_direct_email_rechecks_disabled_user_and_revoked_session_under_lock(email_client):
+    app, _, headers = email_client
+    tokens = app.extensions["token_repository"]
     with app.app_context():
         claims = decode_token(headers["Authorization"].split(" ", 1)[1])
+    original = identity_repository.user_by_id
+    def revoke_under_lock(session, user_id):
+        user = original(session, user_id)
+        tokens.revoke(claims["sid"])
+        return user
+    with patch.object(identity_repository, "user_by_id", side_effect=revoke_under_lock):
+        assert save_email(email_client).status_code == 401
+    with app.app_context():
+        user = db.session.get(AppUser, app.config["TEST_AUTH_USER"])
+        assert user.email is None
+        user.is_active = False
+        db.session.commit()
+    assert save_email(email_client).status_code == 401
+
+
+def test_direct_email_redis_failure_is_fail_closed(email_client):
+    app, _, _ = email_client
+    tokens = app.extensions["token_repository"]
+    with patch.object(tokens.client, "hmget", side_effect=ConnectionError("private-redis-secret")):
+        response = save_email(email_client)
+        assert response.status_code == 503 and "private-redis-secret" not in response.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(AppUser, app.config["TEST_AUTH_USER"]).email is None
+
+
+@pytest.mark.parametrize("payload", [None, [], {}, {"email": "owner@gmail.com"},
+    {"email": "owner@gmail.com", "password": PASSWORD, "userId": "forged"},
+    {"email": "owner@gmail.com", "password": "x" * 129},
+    {"email": "bad\n@gmail.com", "password": PASSWORD}])
+def test_direct_email_schema_rejects_invalid_inputs(email_client, payload):
+    _, client, headers = email_client
+    assert client.post("/api/auth/email", json=payload, headers=headers).status_code == 400
+
+
+def test_removed_email_verification_endpoints_never_consume_old_challenges(email_client):
+    app, client, headers = email_client
     states = state_repository(app)
-    hashed = service.code_hash(app.config["JWT_SECRET_KEY"], challenge, mailer.sent[0][1])
-    barrier = Barrier(2)
-    def consume(_):
-        barrier.wait(timeout=10)
-        try:
-            states.consume_email(challenge, claims["sub"], claims["sid"], hashed)
-            return True
-        except Exception as error:
-            from app.errors import EmailVerificationFailed
-            if not isinstance(error, EmailVerificationFailed):
-                raise
-            return False
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        assert sorted(pool.map(consume, range(2))) == [False, True]
+    old_key = states.prefix + "auth:email:" + str(uuid4())
+    states.client.set(old_key, "legacy-fixture", ex=600)
+    for path in ("start", "verify"):
+        response = client.post("/api/auth/email/" + path, json={"email": "owner@gmail.com", "password": PASSWORD}, headers=headers)
+        assert response.status_code == 404 and response.json["error"]["code"] == "NOT_FOUND"
+    assert states.client.get(old_key) == "legacy-fixture"
+    assert client.get("/api/auth/options").json["data"] == {"google": {"enabled": False}, "emailRegistration": {"enabled": True}}
 
 
 @pytest.mark.parametrize("email", ["한글@gmail.com", "a..b@gmail.com", "a@bad_domain.com", "a@-bad.com", "a@localhost", "a\n@gmail.com"])
@@ -514,7 +511,7 @@ def test_email_normalization_does_not_merge_gmail_aliases():
 
 def test_social_origin_schema_feature_flags_and_no_secret_logging(app):
     client = app.test_client()
-    assert client.get("/api/auth/options").json["data"] == {"google": {"enabled": False}, "emailVerification": {"enabled": False}}
+    assert client.get("/api/auth/options").json["data"] == {"google": {"enabled": False}, "emailRegistration": {"enabled": True}}
     assert client.post("/api/auth/google/start", json={}, headers={"Origin": ORIGIN}).status_code == 400
     app.config["ALLOWED_ORIGINS"] = [ORIGIN]
     assert client.post("/api/auth/google/start", json={}, headers={"Origin": ORIGIN}).status_code == 503
@@ -537,6 +534,15 @@ def test_google_configuration_requires_allowed_exact_callback_and_demo_https(mon
         monkeypatch.setenv("GOOGLE_REDIRECT_URI", uri)
         with pytest.raises(ValueError):
             external_config("development", ["http://localhost:5173"])
+
+
+def test_unused_smtp_settings_cannot_disable_email_registration(monkeypatch, app):
+    monkeypatch.setenv("SMTP_PORT", "unused-invalid-setting")
+    monkeypatch.setenv("SMTP_SSL", "unused")
+    monkeypatch.setenv("SMTP_STARTTLS", "unused")
+    config = external_config("development", [ORIGIN])
+    assert not any(key.startswith("SMTP_") for key in config)
+    assert app.test_client().get("/api/auth/options").json["data"]["emailRegistration"]["enabled"] is True
 
 
 def test_email_identity_migration_preserves_existing_users_and_projects(app):
@@ -567,10 +573,36 @@ def test_email_identity_migration_preserves_existing_users_and_projects(app):
 
 
 @pytest.mark.mariadb
+def test_mariadb_concurrent_direct_email_claims_keep_unique_owner(auth_app):
+    claims = []
+    for login_id in ("auth-a", "auth-b"):
+        token = login(auth_app.test_client(), loginId=login_id).json["data"]["accessToken"]
+        with auth_app.app_context():
+            claims.append(decode_token(token))
+    barrier = Barrier(2)
+    def save(index):
+        with auth_app.app_context():
+            barrier.wait(timeout=10)
+            try:
+                service.save_email(db.session.session_factory, auth_app.extensions["token_repository"],
+                    user_id=claims[index]["sub"], session_id=claims[index]["sid"], password=PASSWORD,
+                    address="shared@gmail.com")
+                return "saved"
+            except IdentityConflict:
+                return "conflict"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(save, range(2))) == ["conflict", "saved"]
+    with auth_app.app_context():
+        users = db.session.scalars(select(AppUser)).all()
+        assert sum(user.email_normalized == "shared@gmail.com" for user in users) == 1
+        assert all(user.email_verified_at is None for user in users)
+
+
+@pytest.mark.mariadb
 @pytest.mark.parametrize("same_subject", [True, False])
 def test_mariadb_concurrent_auto_link_and_case_sensitive_subjects(google_app, same_subject):
     app = google_app.app
-    uid, _ = verified_user(app)
+    uid, _ = registered_user(app)
     barrier = Barrier(2)
     profiles = [{"sub": "Subject_A", "email": "owner@gmail.com", "email_verified": True},
                 {"sub": "Subject_A" if same_subject else "subject_a", "email": "owner@gmail.com", "email_verified": True}]
@@ -591,7 +623,7 @@ def test_mariadb_concurrent_auto_link_and_case_sensitive_subjects(google_app, sa
 @pytest.mark.mariadb
 def test_mariadb_email_change_during_auto_link_rechecks_after_user_lock(google_app):
     app = google_app.app
-    uid, _ = verified_user(app)
+    uid, _ = registered_user(app)
     locked, candidate_read, release = Event(), Event(), Event()
     original = identity_repository.user_by_email
     def candidate(session, normalized):
@@ -603,7 +635,7 @@ def test_mariadb_email_change_during_auto_link_rechecks_after_user_lock(google_a
             user = identity_repository.user_by_id(session, uid)
             locked.set()
             assert release.wait(timeout=15)
-            identity_repository.set_email(user, "new@gmail.com", "new@gmail.com", utc_now())
+            identity_repository.set_email(user, "new@gmail.com", "new@gmail.com")
     def connect():
         assert locked.wait(timeout=15)
         with app.app_context():

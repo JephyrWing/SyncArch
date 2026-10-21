@@ -1,6 +1,5 @@
 """외부 인증 입력 형식입니다. 이메일 주소는 ASCII 정책으로 정규화합니다."""
 import re
-from uuid import UUID
 
 from werkzeug.exceptions import BadRequest
 
@@ -38,17 +37,6 @@ def email(value):
         raise BadRequest(str(error)) from None
 
 
-def email_start(value):
+def email_input(value):
     fields(value, ("email", "password"))
     return email(value["email"])[0], password(value["password"])
-
-
-def email_verify(value):
-    fields(value, ("challengeId", "code"))
-    try:
-        challenge = str(UUID(value["challengeId"]))
-    except (TypeError, ValueError, AttributeError):
-        raise BadRequest("검증 요청 ID를 확인해 주세요.") from None
-    if not isinstance(value["code"], str) or not re.fullmatch(r"\d{6}", value["code"], re.ASCII):
-        raise BadRequest("6자리 검증 코드를 입력해 주세요.")
-    return challenge, value["code"]
