@@ -30,6 +30,35 @@ class AuthenticationUnavailable(ApplicationError):
     status = 503
 
 
+class GoogleAuthenticationFailed(AuthenticationRequired):
+    code = "GOOGLE_AUTH_FAILED"
+    message = "Google 인증을 완료하지 못했습니다. 로그인 과정을 다시 시작해 주세요."
+
+
+class GoogleLinkRequired(ApplicationError):
+    code = "GOOGLE_LINK_REQUIRED"
+    message = "기존 계정의 이메일을 검증하거나 로그인 후 Google 계정을 연결해 주세요."
+    status = 409
+
+
+class IdentityConflict(ApplicationError):
+    code = "IDENTITY_CONFLICT"
+    message = "이미 연결된 계정 또는 이메일과 충돌합니다. 기존 연결을 확인해 주세요."
+    status = 409
+
+
+class EmailVerificationFailed(ApplicationError):
+    code = "EMAIL_VERIFICATION_FAILED"
+    message = "검증 코드가 유효하지 않거나 만료됐습니다. 다시 요청해 주세요."
+    status = 400
+
+
+class VerificationRateLimited(ApplicationError):
+    code = "TOO_MANY_REQUESTS"
+    message = "잠시 후 다시 요청해 주세요."
+    status = 429
+
+
 class CsrfFailed(ApplicationError):
     code = "CSRF_FAILED"
     message = "요청 출처 또는 CSRF 정보가 유효하지 않습니다."

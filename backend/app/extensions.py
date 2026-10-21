@@ -19,3 +19,7 @@ def init_auth(app):
                             retry_on_timeout=False) if app.config["REDIS_URL"] else None
     app.extensions["token_repository"] = TokenRepository(client, app.config["REDIS_KEY_PREFIX"])
     register_jwt_callbacks(jwt, app)
+    from .services.google_provider import GoogleProvider
+    from .services.mail_service import SmtpMailer
+    app.extensions["google_provider"] = GoogleProvider(app.config)
+    app.extensions["verification_mailer"] = SmtpMailer(app.config)
