@@ -36,7 +36,7 @@ def test_migration_and_project_document_roundtrip(app):
         assert saved_document.version == 1
         assert set(inspect(db.engine).get_table_names()) == {
             "alembic_version", "app_users", "projects", "project_members",
-            "project_documents", "document_mutations",
+            "project_documents", "document_mutations", "project_activity",
         }
         db.session.remove()
         downgrade(directory=directory, revision="base")
@@ -58,7 +58,7 @@ def test_db_check_failure_does_not_expose_credentials(app):
 
 
 def test_foundation_and_auth_apis_are_registered(app):
-    assert {rule.rule for rule in app.url_map.iter_rules() if rule.rule.startswith("/api")} == {
+    assert {rule.rule for rule in app.url_map.iter_rules() if rule.rule.startswith("/api")} >= {
         "/api/health", "/api/auth/login", "/api/auth/me", "/api/auth/csrf", "/api/auth/refresh", "/api/auth/logout"}
     response = app.test_client().get("/api/unknown")
     assert response.status_code == 404

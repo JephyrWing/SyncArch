@@ -163,6 +163,48 @@ W15는 `app.auth.verify_access_token(token)`의 `(Actor, {sessionId, expiresAt})
 `session_revoked` 신호의 `session_id` 인자를 사용할 수 있습니다. 소켓 연결/이벤트의 Origin·프로젝트 멤버십·보관 정책,
 만료 타이머와 room 수신 중단은 W15에서 별도 구현해야 합니다. 신호 연결만으로 소켓 종료가 구현된 것은 아닙니다.
 
+### 프로젝트·멤버 API (W04)
+
+아래 API는 Bearer AT와 활성 사용자 확인이 필요합니다. 요청 본문의 `ownerId`, `actorId`, `role`,
+`payload`로 권한이나 문서를 지정할 수 없습니다. 객체 권한은 매 요청의 DB 멤버십으로 확인합니다.
+다른 프로젝트의 ID를 직접 요청하거나 제외된 계정으로 재요청하면 404를 반환합니다.
+
+| 경로 | 요청 | 동작 |
+| --- | --- | --- |
+| `GET /api/projects?archived=false` | `false` 기본값, `true`, `all` | 가입 프로젝트만 조회 |
+| `POST /api/projects` | `title`, 선택 `summary/categoryTag/targetDbms` | 새 프로젝트·OWNER 멤버십·빈 v2 문서·활동 이력 원자 생성; 201 |
+| `GET /api/projects/{pid}/document` | 선택 `If-None-Match` | 멤버만 메타데이터·문서 조회; ETag/304; `private, no-cache` |
+| `POST /api/projects/{pid}/clone` | `sourceVersion`, `title` | 서버 저장본을 새 소유자/프로젝트·version 1로 복사; 원본/내부 참조 보존 |
+| `PATCH /api/projects/{pid}/archive` | `archived` 불리언 | OWNER만 보관/복원; 실제 변경 시 version·수정자·활동 이력 동시 저장 |
+| `GET /api/projects/{pid}/members` | 없음 | 멤버 목록; 비밀번호/해시 제외 |
+| `POST /api/projects/{pid}/members` | `loginId` | OWNER가 기존 활성 사용자를 EDITOR로 추가; 중복은 기존 멤버 반환 |
+| `DELETE /api/projects/{pid}/members/{uid}` | 없음 | OWNER만 제외; 자신 제외 금지; 204 |
+| `GET /api/project-templates` | 없음 | 기존 React 예시의 읽기 전용 스냅샷; DB 저장 없음 |
+| `POST /api/project-templates/{templateId}/clone` | `sourceVersion`, `title` | 명시적 예시 복사만 새 DB 프로젝트 생성; 201 |
+
+`targetDbms`는 `mariadb`만 받습니다. 프로젝트 문서 응답은 `data.project/version/payload/updatedAt`입니다.
+ETag 일치 여부보다 인증·멤버십을 먼저 확인하므로 304로 권한 검사를 우회할 수 없습니다.
+복사의 sourceVersion이 바뀌었으면 409 `VERSION_CONFLICT`와 `currentVersion`을 반환합니다.
+보관된 프로젝트는 조회가 가능하며 멤버 변경·쓰기 정책은 403 `PROJECT_ARCHIVED`로 거부합니다.
+OWNER 권한 위반은 403 `FORBIDDEN`이고 클라이언트의 역할 변경 필드는 받지 않습니다.
+프로젝트 제목/설계 수정은 W05의 `PUT document` 계약으로 이어갑니다. 이번 작업에서 별도 문서 쓰기 경로를 추가하지 않았습니다.
+
+생성·보관/복원·멤버 변경의 트랜잭션은 서비스가 소유합니다. 모든 변경은 projects 행을 먼저 잠그고
+그 후 최신 멤버십과 문서를 확인합니다. MariaDB의 잠금 대기 뒤 오래된 멤버십 snapshot을 사용하지 않도록
+권한 변경 경로의 멤버십 조회도 locking read를 사용합니다. 중복 추가/이미 같은 보관 상태는 version·이력을 중복 생성하지 않습니다.
+멤버 제외는 문서 내용·과거 작성자를 삭제하지 않으며 이후 REST 접근을 거부합니다.
+
+W15는 `app.services.project_events.project_changed`와 `access_revoked` 신호를 연결할 수 있습니다.
+신호의 sender는 `project-service`이며, 전자는 `event`(eventId/projectId/version/mutationId/actorId/actorName/committedAt/changes),
+후자는 `project_id/user_id/reason=MEMBER_REMOVED`를 받습니다. 신호는 성공한 DB 커밋 뒤에만 발생합니다.
+알림 실패는 커밋 성공을 취소하지 않습니다. W15는 제거된 사용자의 room 수신 중단·Origin·만료 검사와 재접속 조회를 구현해야 합니다.
+공유 권한 함수 `services.project_access.require_access(session, actor_id, project_id, lock=True, write=True)`는 W05 저장 서비스에서도 재사용합니다.
+W15의 읽기/room 참여는 같은 정책의 `lock=False, write=False`를 사용하고 편집 허용은 `write=True`로 확인할 수 있습니다.
+
+`backend/app/data/project_templates.json`은 기존 `INITIAL_PROJECTS` 두 예시의 version 1 스냅샷입니다.
+예시와 기존 v1 저장본은 읽기/복사 시 원본 JSON과 내부 ID를 보존합니다. v1→v2 정규화와 데이터형 변환은 W05에서 검증해야 합니다.
+편집 UI의 프로젝트/멤버 화면 연결은 W06, 실제 소켓 전송은 W15 후속이며 API 테스트 통과로 이를 완료 처리하지 않습니다.
+
 계정 준비는 마이그레이션 후 `python -m flask --app app:create_app seed-accounts`로
 명시적으로 실행합니다. `SEED_ACCOUNT_PASSWORDS`는 아래 로그인 ID를 키로 갖는 JSON 객체이며
 서로 다른 12~128자 비밀번호를 환경변수로 안전하게 전달합니다. 명령행·Git·공유 문서에는
@@ -215,7 +257,7 @@ Flask를 실행하는 것만으로 화면 데이터가 DB에 저장되지는 않
 
 ## 모델과 확장 방법
 
-Notion의 구현 기준안에 맞춰 운영 모델을 아래 5개 테이블로 분리했습니다.
+운영 모델은 기존 5개 테이블과 W04에서 추가한 활동 이력 테이블로 구성됩니다.
 
 | 테이블 | 용도 |
 | --- | --- |
@@ -224,6 +266,7 @@ Notion의 구현 기준안에 맞춰 운영 모델을 아래 5개 테이블로 �
 | `project_members` | 프로젝트·사용자 복합 키와 OWNER/EDITOR 역할 |
 | `project_documents` | 문서 JSON, 문서·스키마 버전, 수정자 |
 | `document_mutations` | 중복 저장 방지에 사용할 요청 ID·해시·결과 버전 |
+| `project_activity` | 생성·보관/복원·멤버 변경의 version·작업자·changes 영구 이력; W05 재사용 |
 
 UUID는 CHAR(36), MariaDB 시간은 UTC DATETIME(6), 문서 버전은 양수 BIGINT를 사용합니다.
 FK·고유 제약과 역할·버전 CHECK를 정의했습니다. 객체 권한·CAS 저장·문서 검증 서비스는 후속 구현입니다.
@@ -231,6 +274,8 @@ Pydantic와 Flask-WTF는 해당 기능을 구현할 때 추가하며 현재 사�
 설계 화면의 SQL은 결과물이며 운영 DB에서 실행하는 API를 만들지 않습니다.
 
 기존 `0001`은 보존하고 `0002`에서 JSON을 `project_documents`로 이동합니다.
+`0003`은 기존 문서/계정/멤버/버전을 바꾸지 않고 `project_activity`만 추가합니다.
+`0002`로 내리면 활동 이력만 제거되므로 운영에서는 먼저 백업하고 명시적으로 실행합니다.
 기존 데이터가 있으면 로그인할 수 없는 비활성 `__legacy_import__` 계정을 임시 소유자로 연결합니다.
 원 JSON은 그대로 보존하며 실제 소유자 배정과 문서 정규화는 이후 명시적으로 처리해야 합니다.
 기존 ID가 36자, 제목이 120자를 넘으면 DDL 전에 중단하여 자동 잘림을 막습니다.
@@ -291,3 +336,9 @@ RT 재사용/동시 회전·CSRF/Origin·세션 폐기/누락·Redis 장애·브
 댓글/투표 작성자 보호와 실제 소켓 room·만료·로그아웃 수신 중단은 W07A/W05/W15 구현 후 통합 검증해야 합니다.
 브라우저 검사는 테스트용 HTTP 페이지에서 인증 클라이언트를 직접 사용하며 편집 UI의 로그인 흐름을 검증한 것은 아닙니다.
 운영 HTTPS에서의 Secure 쿠키 전송·프록시 검증은 W13에 남겨 둡니다.
+
+W04 검사도 위 공통 runner를 사용합니다. `--junitxml`에 `.local/w04-sqlite.xml` 또는
+`.local/w04-mariadb.xml`을 지정해 결과를 구분합니다. 새 프로젝트/멤버 API의 브라우저 검사는 실제 두 계정에서
+목록 격리·예시 복사·OWNER 보호·제외 후 404·보관/복원을 확인합니다.
+`mariadb` 표시의 행 잠금 검사 2개는 SQLite 실행에서 명시적으로 제외되고 실제 MariaDB 실행에서는 반드시 포함됩니다.
+마이그레이션 테스트는 DDL 전후 읽기 세션을 닫아 새 세션으로 확인합니다. 기존 실패 보고서를 지우지 않고 수정 후 전체 재실행합니다.
