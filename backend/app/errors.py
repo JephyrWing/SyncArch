@@ -18,6 +18,24 @@ class SeedConflict(ApplicationError):
     status = 409
 
 
+class AuthenticationRequired(ApplicationError):
+    code = "AUTH_REQUIRED"
+    message = "로그인이 필요하거나 인증 정보가 유효하지 않습니다."
+    status = 401
+
+
+class AuthenticationUnavailable(ApplicationError):
+    code = "AUTH_UNAVAILABLE"
+    message = "인증 상태를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요."
+    status = 503
+
+
+class CsrfFailed(ApplicationError):
+    code = "CSRF_FAILED"
+    message = "요청 출처 또는 CSRF 정보가 유효하지 않습니다."
+    status = 400
+
+
 def register_error_handlers(app):
     @app.errorhandler(ApplicationError)
     def application_error(error):

@@ -57,8 +57,9 @@ def test_db_check_failure_does_not_expose_credentials(app):
     assert "secret-password" not in result.output
 
 
-def test_only_health_api_is_registered(app):
-    assert [rule.rule for rule in app.url_map.iter_rules() if rule.rule.startswith("/api")] == ["/api/health"]
+def test_foundation_and_auth_apis_are_registered(app):
+    assert {rule.rule for rule in app.url_map.iter_rules() if rule.rule.startswith("/api")} == {
+        "/api/health", "/api/auth/login", "/api/auth/me", "/api/auth/csrf", "/api/auth/refresh", "/api/auth/logout"}
     response = app.test_client().get("/api/unknown")
     assert response.status_code == 404
     assert response.json["error"]["code"] == "NOT_FOUND"
