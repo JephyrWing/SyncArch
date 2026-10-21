@@ -113,7 +113,7 @@ def main():
         from flask_migrate import upgrade
         from app import create_app
         from app.extensions import db
-        from app.models import AppUser, Project, ProjectDocument
+        from app.models import AppUser, Project, ProjectDocument, UserIdentity, utc_now
         from app.schemas.seed_schema import ACCOUNTS
         config = {"TESTING": True, "SQLALCHEMY_DATABASE_URI": uri}
         app = create_app(config)
@@ -133,6 +133,11 @@ def main():
             db.session.flush()
             project_id = project.id
             restart_actor_id = user.id
+            # W03 확장의 검증 이메일과 대소문자를 보존하는 Google 연결도 함께 영속화합니다.
+            user.email = user.email_normalized = "restart-check@gmail.com"
+            user.email_verified_at = utc_now()
+            db.session.add(UserIdentity(user_id=user.id, provider="google", subject="RestartSubject_A",
+                                        email="restart-check@gmail.com", email_verified=True))
             db.session.add(ProjectDocument(project_id=project_id, updated_by=user.id,
                                             payload={"schemaVersion": 1, "marker": "재시작 보존 🚀"}))
             db.session.commit()
@@ -179,6 +184,10 @@ def main():
             document = db.session.get(ProjectDocument, project_id)
             assert document.payload["marker"] == "재시작 보존 🚀"
             assert document.version == 1
+            restart_user = db.session.get(AppUser, restart_actor_id)
+            assert restart_user.email_normalized == "restart-check@gmail.com" and restart_user.email_verified_at is not None
+            identity = db.session.scalar(select(UserIdentity).where(UserIdentity.user_id == restart_actor_id))
+            assert identity.subject == "RestartSubject_A" and identity.email_verified is True
             assert {user.login_id: (user.id, user.password_hash) for user in
                     db.session.scalars(select(AppUser).where(AppUser.login_id.in_(ACCOUNTS)))} == accounts_before
             restored = project_service.get_document(db.session.session_factory, restart_actor_id, saved_project["id"])
@@ -197,6 +206,7 @@ def main():
         assert restarted_app.test_client().get("/api/health").json == {"data": {"status": "ok", "database": "ok"}}
         print("PASS: DB restart, fresh Flask app, JSON/account/hash persistence, health and db-check", flush=True)
         print("PASS: W05 committed document/metadata/version/mutation result/activity survive DB and app restart", flush=True)
+        print("PASS: W03 verified email and Google subject/user identity survive DB and app restart", flush=True)
     finally:
         try:
             if process is not None and process.poll() is None:

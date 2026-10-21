@@ -170,6 +170,68 @@ W15는 `app.auth.verify_access_token(token)`의 `(Actor, {sessionId, expiresAt})
 `session_revoked` 신호의 `session_id` 인자를 사용할 수 있습니다. 소켓 연결/이벤트의 Origin·프로젝트 멤버십·보관 정책,
 만료 타이머와 room 수신 중단은 W15에서 별도 구현해야 합니다. 신호 연결만으로 소켓 종료가 구현된 것은 아닙니다.
 
+### Google 로그인·계정 연결·이메일 검증 (W03 확장)
+
+`backend/.env`에서 `GOOGLE_OAUTH_ENABLED=true`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`GOOGLE_REDIRECT_URI`를 설정합니다. 로컬 승인 URI는 `http://localhost:5173/api/auth/google/callback`입니다.
+Google Cloud의 **웹 애플리케이션** OAuth client에 같은 URI를 등록하고 브라우저도 `localhost:5173`으로 접속합니다.
+Vite의 `/api` 프록시가 Flask 5000으로 전달합니다. `127.0.0.1`은 별도 출처이므로 서로 섞지 않습니다.
+demo에서는 허용된 HTTPS 출처의 동일 callback 경로를 등록합니다. ID/secret은 Flask에만 두고 `VITE_*`에 넣지 않습니다.
+설정이 없으면 Google 기능을 끄고 `/api/auth/options` 결과로 UI 노출 여부를 판단합니다.
+
+| 경로 | 입력·인증 | 결과 |
+| --- | --- | --- |
+| `GET /api/auth/options` | 없음 | `data.google.enabled`, `data.emailVerification.enabled` |
+| `POST /api/auth/google/start` | 허용 Origin, 빈 JSON `{}` | `authorizationUrl`, `expiresIn=300`, HttpOnly 브라우저 바인딩 쿠키 |
+| `POST /api/auth/google/link/start` | 허용 Origin, 활성 AT, JSON `password` | 기존 사용자/세션에 묶인 연결 시작 |
+| `GET /api/auth/google/callback` | Google의 `code/state` 또는 `error/state`, 바인딩 쿠키 | 검증·연결 후 RT 쿠키와 고정 `/auth/callback` 303 |
+| `POST /api/auth/email/start` | 허용 Origin, 활성 AT, JSON `email/password` | SMTP 발송 후 `challengeId`, `expiresIn=600`; 코드는 응답하지 않음 |
+| `POST /api/auth/email/verify` | 허용 Origin, 같은 사용자·세션의 AT, JSON `challengeId/code` | 검증 이메일 저장, `data.email/verified` |
+
+Google은 Authorization Code + OIDC, PKCE S256, state/nonce를 사용합니다. scope는 `openid email profile`이며
+Google API용 추가 권한이나 Google refresh token을 요청하지 않습니다. 서버가 code를 교환하고 공식 `google-auth`로
+서명·issuer·audience·iat·exp를 검증한 뒤 nonce·azp·subject를 확인합니다. 정상 로그인 callback은
+앱의 RT 쿠키만 발급합니다. React는 `/auth/callback`에서 기존 csrf → refresh → me 순서로 메모리 AT를 복구해야 합니다.
+명시적 연결 성공은 `/auth/callback?flow=link&linked=true`로 돌아오며 기존 로그인 세션을 바꾸지 않습니다.
+클라이언트의 `userId`·임의 `returnTo`는 받지 않습니다. 취소·검증 실패는 JSON 401 `GOOGLE_AUTH_FAILED`,
+추가 확인 필요는 409 `GOOGLE_LINK_REQUIRED`, 계정/이메일 충돌은 409 `IDENTITY_CONFLICT`입니다.
+Redis·provider 장애는 503 `AUTH_UNAVAILABLE`이며 DB 장애는 503 `DB_UNAVAILABLE`입니다.
+
+최초 연결은 Google의 provider+sub를 먼저 조회합니다. 연결이 없을 때만 **앱에서 검증한 정규화 이메일**과
+Google의 검증 이메일을 비교하고, Gmail 또는 일치하는 Workspace `hd`가 있어 Google이 소유권을 보증할 때
+유일한 활성 기존 계정에 자동 연결합니다. 외부 도메인은 `email_verified=true`만으로 자동 연결하지 않습니다.
+이 경우 기존 비밀번호 로그인 → 비밀번호 재확인 → 명시적 Google 연결을 사용합니다.
+연결 후 이메일이 바뀌어도 원래 내부 사용자 UUID를 유지합니다. 자동 가입·사용자 행 병합·멤버십 이동은 하지 않습니다.
+이메일 정규화는 ASCII 공백 제거·소문자화이며 Gmail의 점·`+tag`를 합치지 않습니다.
+
+`0005` migration은 기존 `0004` 뒤에 이메일 3열과 `app_user_identities`를 추가합니다.
+기존 이메일은 모두 NULL로 시작합니다. 이메일은 검증 성공 시에만 정규화 유일 키를 저장하고,
+identity는 `(provider, subject)`와 `(user_id, provider)`의 유일성을 DB로 보장합니다. subject는 ASCII 대소문자를 구분합니다.
+사용자 행 잠금 뒤 최신 이메일·활성 여부·기존 연결을 재확인하고 하나의 SQL 트랜잭션에서 저장합니다.
+이메일 변경도 같은 잠금을 사용합니다. `0005` downgrade는 새 이메일/identity만 제거하므로 해당 데이터를 백업해야 합니다.
+
+Redis의 `auth:oauth:google:<stateHash>`는 바인딩·nonce·PKCE verifier·목적·연결 세션을 TTL 300초로 보관하고
+Lua에서 바인딩 확인과 일회 소비를 함께 처리합니다. 쿠키는 Path `/api/auth/google/`, HttpOnly, SameSite=Lax,
+demo Secure이며 성공/실패 callback에서 제거합니다. 여러 탭에서 시작하면 다시 시작해야 할 수 있습니다.
+이메일 challenge `auth:email:<challengeId>`는 코드 HMAC만 TTL 600초로 저장합니다. 발송 성공 전에는 비활성이며
+같은 사용자·세션만 소비할 수 있습니다. 오답 5회 시 폐기하고 사용자별 재발송은 60초 간격으로 제한합니다.
+DB와 Redis를 하나의 분산 트랜잭션으로 취급하지 않습니다. identity 커밋 뒤 RT 기록이 실패하면 identity는 보존하고
+503과 함께 새 RT를 발급하지 않습니다. OAuth를 새로 시작하면 기존 연결로 재시도합니다.
+코드 소비 뒤 DB 저장이 실패하면 새 이메일 challenge를 요청해야 합니다.
+
+SMTP가 준비되면 `SMTP_HOST/PORT/USERNAME/PASSWORD/FROM`을 채웁니다. 기본 587 + STARTTLS이며,
+465 + SSL이면 `SMTP_SSL=true`, `SMTP_STARTTLS=false`를 함께 지정합니다. 두 TLS 방식을 동시에 켜지 않습니다.
+demo SMTP는 TLS를 요구하며 Redis 전송 설정과 별개입니다. SMTP 미설정은 이메일 기능 비활성/503이고
+발송 실패로 이메일을 검증 처리하거나 코드를 브라우저에 반환하지 않습니다.
+
+callback 응답은 `no-store`, `Referrer-Policy: no-referrer`입니다. Werkzeug 로그에서 callback query를 가립니다.
+운영 React 프록시·Flask 서버·APM도 callback query/code/state와 인증 헤더·쿠키·secret을 기록하지 않도록 설정해야 합니다.
+W06은 로그인/이메일/연결 UI와 callback 복구·오류 안내, W11은 실제 Google E2E, W13은 동의 화면·SMTP·HTTPS·프록시
+운영 설정을 이어갑니다. 로컬 provider fixture·SMTP 수신 서버 테스트를 실제 Google 로그인/실제 메일 전달 성공으로 간주하지 않습니다.
+검증 구현 근거: [Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect),
+[공식 ID 토큰 검증](https://google-auth.readthedocs.io/en/latest/reference/google.oauth2.id_token.html),
+[이메일 소유권 조건](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
+
 ### 프로젝트·멤버 API (W04)
 
 아래 API는 Bearer AT와 활성 사용자 확인이 필요합니다. 요청 본문의 `ownerId`, `actorId`, `role`,

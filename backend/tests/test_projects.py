@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 from flask_migrate import upgrade, downgrade
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
 
@@ -279,14 +279,15 @@ def test_activity_migration_preserves_old_payload_and_downgrade(app):
     directory = str(Path(__file__).resolve().parents[1] / "migrations")
     with app.app_context():
         upgrade(directory=directory, revision="0002")
-        actor = AppUser(login_id="migration-owner", display_name="보존", password_hash="!disabled")
-        db.session.add(actor)
-        db.session.flush()
-        project = Project(title="이전 문서", owner_id=actor.id)
+        # 0002에는 이메일 열이 없으므로 당시 열만 사용해 기존 사용자를 만듭니다.
+        actor_id = str(uuid4())
+        db.session.execute(text("INSERT INTO app_users (id, login_id, display_name, password_hash, is_active, created_at) "
+            "VALUES (:id, 'migration-owner', :name, '!disabled', 1, CURRENT_TIMESTAMP)"), {"id": actor_id, "name": "보존"})
+        project = Project(title="이전 문서", owner_id=actor_id)
         db.session.add(project)
         db.session.flush()
         payload = {"schemaVersion": 1, "marker": "보존 🚀", "unknown": [1, 2]}
-        db.session.add(ProjectDocument(project_id=project.id, payload=payload, updated_by=actor.id))
+        db.session.add(ProjectDocument(project_id=project.id, payload=payload, updated_by=actor_id))
         db.session.commit()
         pid = project.id
         # DDL 전 읽기 트랜잭션을 끝내 새 테이블을 이전 snapshot에서 조회하지 않습니다.

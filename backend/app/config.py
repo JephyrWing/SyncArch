@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL
+from .social_config import external_config
 
 
 def load_config():
@@ -60,6 +61,7 @@ def load_config():
     if not 1 <= access_seconds <= 3600 or not access_seconds < refresh_seconds <= 2592000:
         raise ValueError("JWT expiration settings are outside the supported range")
     return {
+        **external_config(app_env, origins),
         "APP_ENV": app_env,
         "FRONTEND_DIST": Path(__file__).resolve().parents[2] / "frontend" / "dist",
         "DEBUG": False,

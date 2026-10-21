@@ -24,7 +24,9 @@ def isolated_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "development")
     for name in ("DATABASE_URL", "SECRET_KEY", "TRUSTED_HOSTS", "FLASK_DEBUG",
                  "JWT_SECRET_KEY", "REDIS_URL", "ALLOWED_ORIGINS",
-                 "JWT_ACCESS_TOKEN_EXPIRES", "JWT_REFRESH_TOKEN_EXPIRES"):
+                 "JWT_ACCESS_TOKEN_EXPIRES", "JWT_REFRESH_TOKEN_EXPIRES",
+                 "GOOGLE_OAUTH_ENABLED", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI",
+                 "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_SSL", "SMTP_STARTTLS"):
         monkeypatch.delenv(name, raising=False)
 
 
