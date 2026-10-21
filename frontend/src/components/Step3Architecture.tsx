@@ -34,9 +34,11 @@ interface Step3ArchitectureProps {
   nodes: ArchNode[];
   connections: ArchConnection[];
   onAddNode: (node: Omit<ArchNode, 'id'>) => void;
+  onUpdateNode?: (id: string, updated: Partial<ArchNode>) => void;
   onUpdateNodePosition: (id: string, x: number, y: number) => void;
   onDeleteNode: (id: string) => void;
   onAddConnection: (conn: Omit<ArchConnection, 'id'>) => void;
+  onUpdateConnection?: (id: string, updated: Partial<ArchConnection>) => void;
   onDeleteConnection: (id: string) => void;
   archVersions: ArchVersion[];
   currentVersionId: string;
@@ -133,9 +135,11 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
   nodes,
   connections,
   onAddNode,
+  onUpdateNode,
   onUpdateNodePosition,
   onDeleteNode,
   onAddConnection,
+  onUpdateConnection,
   onDeleteConnection,
   archVersions,
   currentVersionId,
@@ -178,6 +182,23 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
   const [targetNodeId, setTargetNodeId] = useState(nodes[1]?.id || '');
   const [protocol, setProtocol] = useState<ArchProtocol>('REST');
   const [connLabel, setConnLabel] = useState('');
+  const [connDescription, setConnDescription] = useState('');
+
+  // Node Edit Modal State
+  const [editingNode, setEditingNode] = useState<ArchNode | null>(null);
+  const [editNodeName, setEditNodeName] = useState('');
+  const [editNodeCategory, setEditNodeCategory] = useState<ArchCategory>('Service');
+  const [editNodeAssignedTeam, setEditNodeAssignedTeam] = useState<'Frontend' | 'Backend' | 'Infra' | 'Common'>('Backend');
+  const [editTechStack, setEditTechStack] = useState('');
+  const [editNodeDesc, setEditNodeDesc] = useState('');
+
+  // Connection Edit Modal State
+  const [editingConnection, setEditingConnection] = useState<ArchConnection | null>(null);
+  const [editConnSourceId, setEditConnSourceId] = useState('');
+  const [editConnTargetId, setEditConnTargetId] = useState('');
+  const [editConnProtocol, setEditConnProtocol] = useState<ArchProtocol>('REST');
+  const [editConnLabel, setEditConnLabel] = useState('');
+  const [editConnDesc, setEditConnDesc] = useState('');
 
   // Canvas Dragging & Zoom
   const [zoom, setZoom] = useState(1);
@@ -236,10 +257,62 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
       targetId: targetNodeId,
       protocol,
       label: connLabel.trim() || undefined,
+      description: connDescription.trim() || '',
     });
 
     setConnLabel('');
+    setConnDescription('');
     setShowAddConn(false);
+  };
+
+  const handleOpenEditNode = (node: ArchNode) => {
+    setEditingNode(node);
+    setEditNodeName(node.name);
+    setEditNodeCategory(node.category);
+    setEditNodeAssignedTeam(node.assignedTeam || 'Backend');
+    setEditTechStack(node.techStack.join(', '));
+    setEditNodeDesc(node.description || '');
+  };
+
+  const handleSaveEditNode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNode || !editNodeName.trim()) return;
+
+    if (onUpdateNode) {
+      onUpdateNode(editingNode.id, {
+        name: editNodeName.trim(),
+        category: editNodeCategory,
+        assignedTeam: editNodeAssignedTeam,
+        techStack: editTechStack.split(',').map((s) => s.trim()).filter(Boolean),
+        description: editNodeDesc.trim() || '아키텍처 컴포넌트',
+      });
+    }
+    setEditingNode(null);
+  };
+
+  const handleOpenEditConnection = (conn: ArchConnection) => {
+    setEditingConnection(conn);
+    setEditConnSourceId(conn.sourceId);
+    setEditConnTargetId(conn.targetId);
+    setEditConnProtocol(conn.protocol);
+    setEditConnLabel(conn.label || '');
+    setEditConnDesc(conn.description || '');
+  };
+
+  const handleSaveEditConnection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingConnection || editConnSourceId === editConnTargetId) return;
+
+    if (onUpdateConnection) {
+      onUpdateConnection(editingConnection.id, {
+        sourceId: editConnSourceId,
+        targetId: editConnTargetId,
+        protocol: editConnProtocol,
+        label: editConnLabel.trim() || undefined,
+        description: editConnDesc.trim() || '',
+      });
+    }
+    setEditingConnection(null);
   };
 
   const handleSaveVersionSubmit = (e: React.FormEvent) => {
@@ -499,7 +572,7 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400">라벨 설명 (옵션)</label>
+                  <label className="text-[10px] text-slate-400">라벨 이름 (옵션)</label>
                   <input
                     type="text"
                     placeholder="예: 실시간 QR 인증 이벤트"
@@ -508,6 +581,17 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
                     className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-400">상세 설명 / 프로토콜 규격 (description)</label>
+                <input
+                  type="text"
+                  placeholder="예: WSS 양방향 동기화 및 heartbeat 30초 주기"
+                  value={connDescription}
+                  onChange={(e) => setConnDescription(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
@@ -629,6 +713,8 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
               <div
                 key={node.id}
                 onClick={() => setSelectedNodeId(node.id)}
+                onDoubleClick={() => !isLocked && handleOpenEditNode(node)}
+                title="더블클릭하여 노드 속성 수정"
                 className={`p-3 cursor-pointer transition-all ${
                   visible ? 'opacity-100' : 'opacity-25'
                 } ${
@@ -694,7 +780,9 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
               return (
                 <div
                   key={c.id}
-                  className="p-2 rounded bg-slate-950 border border-slate-800/80 flex items-center justify-between text-[11px]"
+                  onDoubleClick={() => !isLocked && handleOpenEditConnection(c)}
+                  title="더블클릭하여 연결선 속성 수정"
+                  className="p-2 rounded bg-slate-950 border border-slate-800/80 flex items-center justify-between text-[11px] cursor-pointer hover:border-slate-700 transition-colors"
                 >
                   <div className="flex items-center gap-2 truncate">
                     <span
@@ -886,28 +974,38 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
                     strokeDasharray={cfg.dash || 'none'}
                     markerEnd={`url(#arrow-${c.protocol})`}
                   />
-                  {/* Protocol Badge Tag */}
-                  <rect
-                    x={midX - 35}
-                    y={midY - 10}
-                    width="70"
-                    height="20"
-                    rx="5"
-                    fill="#020617"
-                    stroke={cfg.stroke}
-                    strokeWidth="1.5"
-                  />
-                  <text
-                    x={midX}
-                    y={midY + 3.5}
-                    textAnchor="middle"
-                    fill={cfg.stroke}
-                    fontSize="9.5"
-                    fontWeight="bold"
-                    fontFamily="monospace"
+                  {/* Protocol Badge Tag (Double-click to edit) */}
+                  <g
+                    className="cursor-pointer pointer-events-auto"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (!isLocked) handleOpenEditConnection(c);
+                    }}
                   >
-                    {c.protocol}
-                  </text>
+                    <title>{c.label ? `${c.label} (${c.protocol})${c.description ? ' - ' + c.description : ''} (더블클릭하여 편집)` : `${c.protocol} 연결선 (더블클릭하여 편집)`}</title>
+                    <rect
+                      x={midX - 35}
+                      y={midY - 10}
+                      width="70"
+                      height="20"
+                      rx="5"
+                      fill="#020617"
+                      stroke={cfg.stroke}
+                      strokeWidth="1.5"
+                      className="hover:stroke-white transition-colors"
+                    />
+                    <text
+                      x={midX}
+                      y={midY + 3.5}
+                      textAnchor="middle"
+                      fill={cfg.stroke}
+                      fontSize="9.5"
+                      fontWeight="bold"
+                      fontFamily="monospace"
+                    >
+                      {c.protocol}
+                    </text>
+                  </g>
                 </g>
               );
             })}
@@ -927,6 +1025,11 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
                 <div
                   key={node.id}
                   onMouseDown={(e) => handleNodeMouseDown(e, node)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    if (!isLocked) handleOpenEditNode(node);
+                  }}
+                  title="더블클릭하여 노드 속성(이름, 역할설명, 기술스택, 조직) 수정"
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
                   className={`absolute w-52 p-3 rounded-xl border bg-slate-900/95 shadow-xl cursor-move transition-opacity ${
                     isVisible ? 'opacity-100' : 'opacity-20 pointer-events-none'
@@ -967,6 +1070,233 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
         </div>
       </div>
       </div>
+
+      {/* Edit Architecture Node Modal (TC-ARCH-01) */}
+      {editingNode && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden text-slate-100">
+            <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                  <Server className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">아키텍처 노드 속성 편집</h4>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    ID 보존: {editingNode.id} (좌표 및 기존 연결관계 유지)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingNode(null)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditNode} className="p-4 space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">컴포넌트 이름</label>
+                  <input
+                    type="text"
+                    value={editNodeName}
+                    onChange={(e) => setEditNodeName(e.target.value)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">계층 (Category)</label>
+                  <select
+                    value={editNodeCategory}
+                    onChange={(e) => setEditNodeCategory(e.target.value as ArchCategory)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Client">Client</option>
+                    <option value="Service">Service</option>
+                    <option value="Messaging">Messaging</option>
+                    <option value="DataStore">DataStore</option>
+                    <option value="Infra">Infra</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">담당 조직</label>
+                  <select
+                    value={editNodeAssignedTeam}
+                    onChange={(e) => setEditNodeAssignedTeam(e.target.value as any)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Backend">Backend</option>
+                    <option value="Frontend">Frontend</option>
+                    <option value="Infra">Infra</option>
+                    <option value="Common">Common</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300">기술 스택 (쉼표로 구분)</label>
+                <input
+                  type="text"
+                  placeholder="예: React 19, TypeScript, Vite"
+                  value={editTechStack}
+                  onChange={(e) => setEditTechStack(e.target.value)}
+                  className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300">역할 및 상세 설명 (description)</label>
+                <textarea
+                  rows={3}
+                  placeholder="컴포넌트의 책임과 역할을 기술합니다."
+                  value={editNodeDesc}
+                  onChange={(e) => setEditNodeDesc(e.target.value)}
+                  className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingNode(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editNodeName.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors shadow-lg shadow-indigo-600/20"
+                >
+                  속성 저장 (ID 보존)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Architecture Connection Modal (TC-ARCH-02) */}
+      {editingConnection && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden text-slate-100">
+            <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
+                  <Link className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">통신 연결선 속성 편집</h4>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    ID 보존: {editingConnection.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingConnection(null)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditConnection} className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">출발 노드 (Source)</label>
+                  <select
+                    value={editConnSourceId}
+                    onChange={(e) => setEditConnSourceId(e.target.value)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  >
+                    {nodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name} ({n.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">도착 노드 (Target)</label>
+                  <select
+                    value={editConnTargetId}
+                    onChange={(e) => setEditConnTargetId(e.target.value)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  >
+                    {nodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name} ({n.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">통신 프로토콜</label>
+                  <select
+                    value={editConnProtocol}
+                    onChange={(e) => setEditConnProtocol(e.target.value as ArchProtocol)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="REST">REST (Sky Blue - HTTPS)</option>
+                    <option value="WebSocket">WebSocket (Amber - 실시간 WSS)</option>
+                    <option value="gRPC">gRPC (Purple - 내부 RPC)</option>
+                    <option value="Pub/Sub">Pub/Sub (Rose - 이벤트 큐)</option>
+                    <option value="SQL">SQL (Emerald - DB 커넥션)</option>
+                    <option value="Redis">Redis (Orange - 캐시 커맨드)</option>
+                    <option value="Kafka">Kafka (Cyan - 스트리밍)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300">라벨 이름 (옵션)</label>
+                  <input
+                    type="text"
+                    placeholder="예: 실시간 QR 인증 이벤트"
+                    value={editConnLabel}
+                    onChange={(e) => setEditConnLabel(e.target.value)}
+                    className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300">상세 설명 / 프로토콜 규격 (description)</label>
+                <textarea
+                  rows={2}
+                  placeholder="통신 방식, 방향성, 주기 또는 페이로드 규격을 기재합니다."
+                  value={editConnDesc}
+                  onChange={(e) => setEditConnDesc(e.target.value)}
+                  className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-sky-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingConnection(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={editConnSourceId === editConnTargetId}
+                  className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-40 transition-colors shadow-lg shadow-sky-600/20"
+                >
+                  속성 저장 (ID 보존)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Save New Architecture Version Modal */}
       {showSaveVersionModal && (

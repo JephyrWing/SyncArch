@@ -423,6 +423,12 @@ export default function App() {
     updateCurrentProject({ nodes: [...currentProject.nodes, newNode] });
   };
 
+  const handleUpdateNode = (id: string, updated: Partial<ArchNode>) => {
+    updateCurrentProject({
+      nodes: currentProject.nodes.map((n) => (n.id === id ? { ...n, ...updated } : n)),
+    });
+  };
+
   const handleUpdateNodePosition = (id: string, x: number, y: number) => {
     updateCurrentProject({
       nodes: currentProject.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)),
@@ -437,11 +443,32 @@ export default function App() {
   };
 
   const handleAddConnection = (conn: Omit<ArchConnection, 'id'>) => {
+    const validSource = currentProject.nodes.some((n) => n.id === conn.sourceId);
+    const validTarget = currentProject.nodes.some((n) => n.id === conn.targetId);
+    if (!validSource || !validTarget || conn.sourceId === conn.targetId) {
+      return;
+    }
     const newConn: ArchConnection = {
       ...conn,
       id: `conn-${Date.now()}`,
     };
     updateCurrentProject({ connections: [...currentProject.connections, newConn] });
+  };
+
+  const handleUpdateConnection = (id: string, updated: Partial<ArchConnection>) => {
+    updateCurrentProject({
+      connections: currentProject.connections.map((c) => {
+        if (c.id !== id) return c;
+        const newSourceId = updated.sourceId ?? c.sourceId;
+        const newTargetId = updated.targetId ?? c.targetId;
+        const validSource = currentProject.nodes.some((n) => n.id === newSourceId);
+        const validTarget = currentProject.nodes.some((n) => n.id === newTargetId);
+        if (!validSource || !validTarget || newSourceId === newTargetId) {
+          return c;
+        }
+        return { ...c, ...updated };
+      }),
+    });
   };
 
   const handleDeleteConnection = (id: string) => {
@@ -616,9 +643,11 @@ export default function App() {
             nodes={currentProject.nodes}
             connections={currentProject.connections}
             onAddNode={handleAddNode}
+            onUpdateNode={handleUpdateNode}
             onUpdateNodePosition={handleUpdateNodePosition}
             onDeleteNode={handleDeleteNode}
             onAddConnection={handleAddConnection}
+            onUpdateConnection={handleUpdateConnection}
             onDeleteConnection={handleDeleteConnection}
             archVersions={currentProject.archVersions}
             currentVersionId={currentProject.currentArchVersionId || currentProject.archVersions[0]?.id || ''}
