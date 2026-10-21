@@ -5,7 +5,7 @@ React 프로토타입에 Flask + MariaDB 백엔드 기반을 추가한 프로젝
 기존 React 화면은 유지하고 기본 개발 서버는 Vite로 실행합니다.
 이전 Express/Gemini 서버는 `frontend/server.ts`에 보존하며 `npm run dev:legacy`로만 실행합니다.
 공개 DB 상태 API `/api/health`와 명시적 팀원 계정 초기화 CLI를 제공합니다.
-인증·프로젝트 업무 API·프론트 저장 연동은 후속 작업입니다.
+JWT 인증 API와 Redis RT 회전을 제공합니다. 프로젝트 업무 API와 프론트 저장 화면 연결은 후속 작업입니다.
 
 ## 구조
 
@@ -66,7 +66,7 @@ Copy-Item backend/.env.example backend/.env
 개별 DB 변수를 쓰면 비밀번호에 `@`, `#` 같은 문자가 있어도 직접 URL 인코딩할 필요가 없습니다.
 DB 계정 정보는 프론트엔드의 `VITE_*` 환경변수에 넣지 않습니다.
 
-환경별 설정은 아래와 같습니다. 이 값들은 향후 세션 인증을 위한 기반이며 로그인 API는 아직 없습니다.
+환경별 설정은 아래와 같습니다. 인증은 JWT와 Redis 세션을 사용합니다.
 
 | 설정 | 개발 환경 | 시연 환경 |
 | --- | --- | --- |
@@ -77,7 +77,17 @@ DB 계정 정보는 프론트엔드의 `VITE_*` 환경변수에 넣지 않습니
 | 세션 쿠키 | HttpOnly, SameSite=Lax | 동일 설정과 Secure 추가. HTTPS 필요 |
 
 시연 모드는 DB 비밀번호도 명시해야 하며 잘못된 필수 설정으로 시작하지 않습니다.
-세션 수명은 8시간 기준입니다. 개발 중에도 재시작 간 세션을 유지하려면 고정된 SECRET_KEY를 설정합니다.
+JWT 서명키 `JWT_SECRET_KEY`는 `SECRET_KEY`와 별도로 설정합니다. 기본 AT 수명은 900초,
+RT 세션은 로그인부터 604800초(7일)이며 회전해도 절대 만료 시각을 늘리지 않습니다.
+`JWT_ACCESS_TOKEN_EXPIRES`, `JWT_REFRESH_TOKEN_EXPIRES`로 초 단위 설정을 바꿀 수 있습니다.
+
+Redis Cloud는 사용자 확정에 따라 개발·배포 모두 TLS 없이 연결합니다.
+`backend/.env`의 `REDIS_URL=redis://default:<URL인코딩한비밀번호>@<호스트>:<포트>/0`을 채웁니다.
+Endpoint는 이 URL의 호스트와 포트에 해당합니다. 별도 API 키는 필요하지 않습니다.
+Redis 접속 정보는 Flask만 보관하고 프론트의 `VITE_*` 변수에는 넣지 않습니다.
+`ALLOWED_ORIGINS`에는 브라우저가 접속하는 정확한 출처를 쉼표로 구분해 넣습니다.
+demo 환경은 무작위 32자 이상의 `JWT_SECRET_KEY`, `REDIS_URL`, 실제 `ALLOWED_ORIGINS`를 요구합니다.
+브라우저↔Flask는 배포 시 HTTPS를 사용하며 RT 쿠키의 Secure 정책은 Redis TLS 설정과 별개입니다.
 
 ### 2. MariaDB 실행
 
@@ -122,6 +132,36 @@ Flask는 기본 개발 포트 5000에서 실행됩니다. React 빌드가 있으
 `{"data":{"status":"ok","database":"ok"}}`를 반환합니다. DB 접속 실패는
 `503`과 공통 `DB_UNAVAILABLE` 오류로 반환하며 접속 정보나 SQL을 노출하지 않습니다.
 스키마 준비·Redis·JWT·웹소켓 상태까지 검증하는 readiness는 후속 범위입니다.
+
+### 인증 API와 클라이언트
+
+| 경로 | 입력·인증 | 결과 |
+| --- | --- | --- |
+| `POST /api/auth/login` | JSON `loginId`, `password`; 허용된 `Origin` 필수 | `data.user`, `accessToken`, `expiresIn`; RT 쿠키 발급 |
+| `GET /api/auth/me` | `Authorization: Bearer <AT>` | `data.id/loginId/displayName` |
+| `GET /api/auth/csrf` | RT 쿠키 | `data.csrfToken`; `no-store` |
+| `POST /api/auth/refresh` | RT 쿠키, 허용된 `Origin`, `X-CSRF-TOKEN` | RT 1회 회전, 새 AT와 RT |
+| `POST /api/auth/logout` | RT 쿠키, 허용된 `Origin`, `X-CSRF-TOKEN` | 세션 폐기, RT 쿠키 삭제 |
+
+RT는 `syncarch_refresh` HttpOnly·SameSite=Lax·Path=/api/auth/ 쿠키입니다.
+demo에서는 Secure를 사용합니다. AT는 쿠키·URL·브라우저 저장소에 넣지 않고 메모리에 둡니다.
+인증 응답은 `Cache-Control: no-store`입니다. Origin/CSRF 거부는 400 `CSRF_FAILED`,
+잘못된 계정·토큰·만료·폐기는 401 `AUTH_REQUIRED`, Redis 연결 실패는 503 `AUTH_UNAVAILABLE`입니다.
+일반 API는 Bearer AT만 받고 RT 쿠키를 AT 대신 사용하지 않습니다.
+
+`frontend/src/api/auth.ts`의 `authClient`는 login/me/refresh/logout과 메모리 AT를 제공합니다.
+같은 탭의 갱신은 single flight로 합치고 Web Locks 지원 브라우저에서는 같은 출처의 여러 탭을 직렬화합니다.
+공유 RT 쿠키의 최신 CSRF 값을 잠금 안에서 다시 읽습니다. RT를 동시에 재사용하면 세션 family가 폐기됩니다.
+Web Locks가 없는 브라우저에서는 탭 간 직렬화를 보장하지 않으며 동시 갱신 시 재로그인이 필요할 수 있습니다.
+현재 편집 화면에 로그인 UI를 연결하는 작업은 W06에서 이어 갑니다.
+
+Redis에는 `syncarch:auth:rt:{sessionId}`에 사용자 ID·RT jti 해시·활성 상태·절대 만료 시각만 기록합니다.
+Lua로 현재 jti를 비교해 한 번만 교체하며, 이전 RT 재사용 시 같은 세션의 AT도 거부합니다.
+매 보호 요청에서 세션과 사용자 활성을 다시 확인합니다. Redis 키 누락·만료·장애는 인증 허용으로 처리하지 않습니다.
+
+W15는 `app.auth.verify_access_token(token)`의 `(Actor, {sessionId, expiresAt})` 반환값과
+`session_revoked` 신호의 `session_id` 인자를 사용할 수 있습니다. 소켓 연결/이벤트의 Origin·프로젝트 멤버십·보관 정책,
+만료 타이머와 room 수신 중단은 W15에서 별도 구현해야 합니다. 신호 연결만으로 소켓 종료가 구현된 것은 아닙니다.
 
 계정 준비는 마이그레이션 후 `python -m flask --app app:create_app seed-accounts`로
 명시적으로 실행합니다. `SEED_ACCOUNT_PASSWORDS`는 아래 로그인 ID를 키로 갖는 JSON 객체이며
@@ -186,7 +226,7 @@ Notion의 구현 기준안에 맞춰 운영 모델을 아래 5개 테이블로 �
 | `document_mutations` | 중복 저장 방지에 사용할 요청 ID·해시·결과 버전 |
 
 UUID는 CHAR(36), MariaDB 시간은 UTC DATETIME(6), 문서 버전은 양수 BIGINT를 사용합니다.
-FK·고유 제약과 역할·버전 CHECK를 정의했습니다. 인증·권한·CAS 저장·문서 검증 서비스는 후속 구현입니다.
+FK·고유 제약과 역할·버전 CHECK를 정의했습니다. 객체 권한·CAS 저장·문서 검증 서비스는 후속 구현입니다.
 Pydantic와 Flask-WTF는 해당 기능을 구현할 때 추가하며 현재 사용하지 않는 의존성으로 넣지 않았습니다.
 설계 화면의 SQL은 결과물이며 운영 DB에서 실행하는 API를 만들지 않습니다.
 
@@ -233,3 +273,21 @@ DB 서버 재시작 및 새 Flask 앱 생성 후 JSON 유지와 `db-check`를 �
 `TEST_DATABASE_URL`을 직접 지정하는 경우 삭제 가능한 `syncarch_test_<UUID hex>` DB만 허용하며,
 테스트는 그 DB의 테이블을 초기화하므로 서비스 DB를 지정하면 안 됩니다.
 이 검증은 기반 스키마 검증이며 로그인·실제 두 계정 협업·배포 검증의 완료를 뜻하지 않습니다.
+
+W03의 인증 검사에는 실제 Redis와 설치된 Chrome이 필요합니다. 먼저 인증 모듈을 테스트용으로 빌드합니다.
+프로젝트 루트에서 다음 명령을 실행합니다. `.env`의 Redis URL은 출력하지 않으며,
+Redis 테스트는 매번 고유한 `syncarch:test:<UUID>:` 영역만 만들고 정리합니다.
+공용 세션 키와 기존 DB는 초기화하지 않습니다.
+
+```powershell
+New-Item -ItemType Directory -Force .local | Out-Null
+.\frontend\node_modules\.bin\esbuild.cmd frontend/src/api/auth.ts --bundle --format=esm --outfile=.local/auth-client.js
+.\backend\.venv\Scripts\python.exe backend/scripts/run_auth_checks.py --junitxml .local/w03-sqlite.xml
+.\backend\.venv\Scripts\python.exe backend/scripts/run_auth_checks.py --mariadb-bin 'C:\your-MariaDB-11.4\bin' --junitxml .local/w03-mariadb.xml
+```
+
+`TEST_REDIS_URL`을 별도로 설정하면 `.env` 대신 그 테스트용 Redis에 연결합니다.
+RT 재사용/동시 회전·CSRF/Origin·세션 폐기/누락·Redis 장애·브라우저 새로고침·다중 탭/독립 계정을 검사합니다.
+댓글/투표 작성자 보호와 실제 소켓 room·만료·로그아웃 수신 중단은 W07A/W05/W15 구현 후 통합 검증해야 합니다.
+브라우저 검사는 테스트용 HTTP 페이지에서 인증 클라이언트를 직접 사용하며 편집 UI의 로그인 흐름을 검증한 것은 아닙니다.
+운영 HTTPS에서의 Secure 쿠키 전송·프록시 검증은 W13에 남겨 둡니다.

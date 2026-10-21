@@ -1,7 +1,7 @@
 from flask import Flask
 
 from .config import load_config
-from .extensions import db, migrate
+from .extensions import db, migrate, init_auth
 
 
 def create_app(test_config=None):
@@ -13,6 +13,7 @@ def create_app(test_config=None):
     app.json.sort_keys = False
     db.init_app(app)
     migrate.init_app(app, db, compare_type=True)
+    init_auth(app)
 
     # Import models so Flask-Migrate can discover their metadata.
     from . import models  # noqa: F401
@@ -23,7 +24,9 @@ def create_app(test_config=None):
 
     from .errors import register_error_handlers
     from .routes.health import health
+    from .routes.auth import auth
     app.register_blueprint(health)
+    app.register_blueprint(auth)
     register_error_handlers(app)
 
     return app

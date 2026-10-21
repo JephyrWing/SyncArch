@@ -13,7 +13,9 @@ from app.extensions import db
 def isolated_environment(monkeypatch):
     monkeypatch.setattr("app.config.load_dotenv", lambda *args, **kwargs: False)
     monkeypatch.setenv("APP_ENV", "development")
-    for name in ("DATABASE_URL", "SECRET_KEY", "TRUSTED_HOSTS", "FLASK_DEBUG"):
+    for name in ("DATABASE_URL", "SECRET_KEY", "TRUSTED_HOSTS", "FLASK_DEBUG",
+                 "JWT_SECRET_KEY", "REDIS_URL", "ALLOWED_ORIGINS",
+                 "JWT_ACCESS_TOKEN_EXPIRES", "JWT_REFRESH_TOKEN_EXPIRES"):
         monkeypatch.delenv(name, raising=False)
 
 

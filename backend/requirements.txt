@@ -17,3 +17,6 @@ Mako==1.4.3
 MarkupSafe==3.0.4
 typing_extensions==4.16.0
 Werkzeug==3.1.9
+Flask-JWT-Extended==4.7.4
+PyJWT==2.15.1
+redis==8.1.0

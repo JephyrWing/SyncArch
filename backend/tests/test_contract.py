@@ -167,6 +167,9 @@ def test_demo_requires_secrets_and_hosts(monkeypatch):
     with pytest.raises(ValueError, match="DB_PASSWORD"):
         load_config()
     monkeypatch.setenv("DB_PASSWORD", "test-only")
+    monkeypatch.setenv("JWT_SECRET_KEY", "jwt-test-only-" * 8)
+    monkeypatch.setenv("REDIS_URL", "redis://default:test@localhost:6379/0")
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://demo.example.test")
     config = load_config()
     assert config["SESSION_COOKIE_SECURE"] is True
     assert config["SESSION_COOKIE_HTTPONLY"] is True
@@ -193,7 +196,7 @@ def test_frontend_fallback_excludes_api_and_missing_assets(app, tmp_path):
     client = app.test_client()
     assert client.get("/").status_code == 200
     assert b"SyncArch test" in client.get("/projects/example").data
-    for path in ("/api", "/api/auth/me", "/assets/missing.js"):
+    for path in ("/api", "/api/auth/not-implemented", "/assets/missing.js"):
         response = client.get(path)
         assert response.status_code == 404
         assert response.json["error"]["code"] == "NOT_FOUND"
