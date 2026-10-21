@@ -1,5 +1,6 @@
 """Test on an isolated Windows MariaDB 11.4 instance, then verify restart persistence."""
 import argparse
+import json
 import os
 from pathlib import Path
 import secrets
@@ -20,6 +21,7 @@ sys.path.insert(0, str(BACKEND))
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bin-dir", type=Path, default=Path(r"C:\Program Files\MariaDB 11.4\bin"))
+    parser.add_argument("--junitxml", type=Path, help="Retain the pytest report outside the temporary DB directory")
     args = parser.parse_args()
     server = args.bin_dir / "mariadbd.exe"
     install_db = args.bin_dir / "mariadb-install-db.exe"
@@ -95,15 +97,24 @@ def main():
                          port=port, database=database, query={"charset": "utf8mb4"})
         environment = os.environ.copy()
         environment["TEST_DATABASE_URL"] = uri.render_as_string(hide_password=False)
-        tests = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                                "--basetemp", str(work / "pytest")],
+        test_command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                        "--basetemp", str(work / "pytest")]
+        if args.junitxml:
+            test_command.extend(["--junitxml", str(args.junitxml.resolve())])
+        tests = subprocess.run(test_command,
                                cwd=BACKEND, env=environment)
         if tests.returncode:
             raise RuntimeError("MariaDB integration tests failed")
+        # The last pytest fixture may intentionally leave disabled/conflicting users.
+        # Only reset this generated disposable DB, never an application database.
+        with connect() as connection, connection.cursor() as cursor:
+            cursor.execute(f"DROP DATABASE `{database}`")
+            cursor.execute(f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
         from flask_migrate import upgrade
         from app import create_app
         from app.extensions import db
         from app.models import AppUser, Project, ProjectDocument
+        from app.schemas.seed_schema import ACCOUNTS
         config = {"TESTING": True, "SQLALCHEMY_DATABASE_URI": uri}
         app = create_app(config)
         with app.app_context():
@@ -126,6 +137,20 @@ def main():
             db.session.commit()
             db.session.remove()
             db.engine.dispose()
+        # Explicit bootstrap only: passwords remain in memory and out of output.
+        os.environ["SEED_ACCOUNT_PASSWORDS"] = json.dumps({key: secrets.token_urlsafe(24) for key in ACCOUNTS})
+        try:
+            seeded = app.test_cli_runner().invoke(args=["seed-accounts"])
+        finally:
+            os.environ.pop("SEED_ACCOUNT_PASSWORDS", None)
+        assert seeded.exit_code == 0
+        with app.app_context():
+            from sqlalchemy import select
+            accounts_before = {user.login_id: (user.id, user.password_hash) for user in
+                               db.session.scalars(select(AppUser).where(AppUser.login_id.in_(ACCOUNTS)))}
+            assert len(accounts_before) == 5
+            db.session.remove()
+            db.engine.dispose()
         stop()
         start()
         restarted_app = create_app(config)
@@ -133,11 +158,14 @@ def main():
             document = db.session.get(ProjectDocument, project_id)
             assert document.payload["marker"] == "재시작 보존 🚀"
             assert document.version == 1
+            assert {user.login_id: (user.id, user.password_hash) for user in
+                    db.session.scalars(select(AppUser).where(AppUser.login_id.in_(ACCOUNTS)))} == accounts_before
             db.session.remove()
             db.engine.dispose()
         result = restarted_app.test_cli_runner().invoke(args=["db-check"])
         assert result.exit_code == 0
-        print("PASS: DB restart, fresh Flask app, JSON persistence and db-check", flush=True)
+        assert restarted_app.test_client().get("/api/health").json == {"data": {"status": "ok", "database": "ok"}}
+        print("PASS: DB restart, fresh Flask app, JSON/account/hash persistence, health and db-check", flush=True)
     finally:
         try:
             if process is not None and process.poll() is None:

@@ -4,8 +4,8 @@ React 프로토타입에 Flask + MariaDB 백엔드 기반을 추가한 프로젝
 프론트엔드 파일은 `frontend/`, Flask 서버는 `backend/`로 분리되어 있습니다.
 기존 React 화면은 유지하고 기본 개발 서버는 Vite로 실행합니다.
 이전 Express/Gemini 서버는 `frontend/server.ts`에 보존하며 `npm run dev:legacy`로만 실행합니다.
-API URL, 엔드포인트, 프록시, 프론트엔드 데이터 저장 연동은 추가하지 않았습니다.
-이미 정한 API 명세에 맞춰 이후 Flask Blueprint를 등록하면 됩니다.
+공개 DB 상태 API `/api/health`와 명시적 팀원 계정 초기화 CLI를 제공합니다.
+인증·프로젝트 업무 API·프론트 저장 연동은 후속 작업입니다.
 
 ## 구조
 
@@ -21,11 +21,16 @@ frontend/
   .aistudio/                 기존 프로토타입 생성 도구 산출물
 backend/
   app/
-    __init__.py              Flask 앱 팩토리, 확장 초기화, 공통 JSON 오류 처리
+    __init__.py              Flask 앱 팩토리와 구성 등록
+    errors.py                공통 JSON 오류 변환과 업무 예외
     config.py                환경변수와 MariaDB 연결 설정
     extensions.py            SQLAlchemy / Flask-Migrate
-    models.py                사용자·프로젝트·멤버·문서·저장 기록 모델
-    commands.py              URL 없이 DB 연결을 확인하는 CLI
+    models/                  사용자·프로젝트·멤버·문서·저장 기록 모델과 공개 import
+    routes/health.py         공개 DB 상태 확인 HTTP 처리
+    services/                health와 계정 초기화 업무·트랜잭션
+    repositories/            DB 상태 조회와 사용자 저장
+    schemas/seed_schema.py   계정 초기화 입력 검증
+    commands.py              DB 연결 확인과 명시적 계정 초기화 CLI
     frontend.py              React 빌드 제공, API를 제외한 SPA fallback
   migrations/                Alembic 마이그레이션과 최초 스키마
   tests/                     DB 저장, 마이그레이션, 설정 검증
@@ -113,7 +118,32 @@ Flask는 기본 개발 포트 5000에서 실행됩니다. React 빌드가 있으
 서버 실행 시 테이블은 자동 생성하지 않습니다.
 `db-check`는 접속만 확인하며, 스키마 생성은 `db upgrade`로 명시적으로 수행합니다.
 
-개발 서버 대신 Windows에서도 쓸 수 있는 WSGI 서버로 실행하려면 `backend`에서:
+`GET /api/health`는 DB에 `SELECT 1`을 실행한 뒤
+`{"data":{"status":"ok","database":"ok"}}`를 반환합니다. DB 접속 실패는
+`503`과 공통 `DB_UNAVAILABLE` 오류로 반환하며 접속 정보나 SQL을 노출하지 않습니다.
+스키마 준비·Redis·JWT·웹소켓 상태까지 검증하는 readiness는 후속 범위입니다.
+
+계정 준비는 마이그레이션 후 `python -m flask --app app:create_app seed-accounts`로
+명시적으로 실행합니다. `SEED_ACCOUNT_PASSWORDS`는 아래 로그인 ID를 키로 갖는 JSON 객체이며
+서로 다른 12~128자 비밀번호를 환경변수로 안전하게 전달합니다. 명령행·Git·공유 문서에는
+실제 비밀번호를 넣지 않습니다.
+
+| 로그인 ID | 표시 이름 |
+| --- | --- |
+| `choi_jinwoo` | 최진우 |
+| `jeon_seolmin` | 전설민 |
+| `maeng_dongyeong` | 맹동영 |
+| `kim_donghyeon` | 김동현 |
+| `shin_osim` | 신오심 |
+
+비밀번호는 해시로 저장하며, 다섯 계정의 생성은 한 트랜잭션입니다. 재실행은 기존 ID·비밀번호를
+유지하고 누락 계정만 추가합니다. 같은 로그인 ID의 표시 이름이 다르거나 비활성인 계정이 있으면
+전체 작업을 거부합니다. 기존 프로젝트·문서·멤버십을 생성/초기화하지 않으며, 앱 시작 시 seed를
+자동 실행하지 않습니다. 위 로그인 ID는 W02 초기 계정 계약이며 W03 로그인에서 재사용합니다.
+
+아래 Waitress 명령은 기존 REST/정적 화면의 로컬 확인에만 사용합니다.
+v1.7 웹소켓 운영 구성은 W15의 고정 의존성과 W13의 Gunicorn 단일 worker + threads +
+simple-websocket 검증 후 적용합니다. 현재 명령으로 웹소켓 운영 준비를 완료했다고 판단하지 않습니다.
 
 ```powershell
 .\.venv\Scripts\waitress-serve.exe --listen=127.0.0.1:5000 wsgi:app
