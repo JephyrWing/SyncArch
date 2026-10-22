@@ -7,9 +7,14 @@ server {
     access_log off;
     # Callback query/code/state and auth headers must never appear in proxy logs.
     error_log /dev/null;
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=5s ipv6=off;
+    resolver_timeout 2s;
+    # Resolve at request time: Cloudtype can replace the backend service IP.
+    set $api_upstream ${API_UPSTREAM};
 
     location /api/ {
-        proxy_pass ${API_UPSTREAM};
+        proxy_pass $api_upstream;
+        proxy_connect_timeout 5s;
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -19,7 +24,8 @@ server {
         proxy_read_timeout 65s;
     }
     location = /api {
-        proxy_pass ${API_UPSTREAM};
+        proxy_pass $api_upstream;
+        proxy_connect_timeout 5s;
         proxy_set_header Host $http_host;
     }
     location /assets/ {

@@ -69,7 +69,7 @@ def migration_persistence(service):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('suite', choices=('unit', 'mariadb', 'browser'))
+    parser.add_argument('suite', choices=('unit', 'mariadb', 'mariadb-full', 'browser', 'browser-smoke'))
     parser.add_argument('--restart-service')
     args = parser.parse_args()
     if os.getenv('CI') != 'true':
@@ -92,7 +92,7 @@ def main():
                 cursor.execute(f'CREATE DATABASE `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci')
             environment['TEST_DATABASE_URL'] = f'mysql+pymysql://root:ci-only-mariadb@127.0.0.1:{os.getenv("CI_DB_PORT", "3306")}/{name}?charset=utf8mb4'
         report = local / f'{args.suite}.xml'
-        subprocess.run([sys.executable, '-m', 'pytest', '-q', '--maxfail=1', '--ci-suite', args.suite,
+        subprocess.run([sys.executable, '-m', 'pytest', '-q', '-ra', '--durations=10', '--maxfail=1', '--ci-suite', args.suite,
                         '--junitxml', str(report)], cwd=ROOT / 'backend', env=environment, check=True)
         validate(report)
         if args.restart_service:

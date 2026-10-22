@@ -67,6 +67,7 @@ def sign_in(page, login_id="auth-a"):
     return page.evaluate("([loginId,password]) => window.auth.login(loginId,password).then(user=>user.displayName)", [login_id, PASSWORD])
 
 
+@pytest.mark.deployment_smoke
 def test_browser_refresh_memory_cookie_and_logout(browser_session):
     browser, origin = browser_session
     context = browser.new_context()
@@ -91,6 +92,7 @@ def test_browser_refresh_memory_cookie_and_logout(browser_session):
         context.close()
 
 
+@pytest.mark.deployment_smoke
 def test_browser_single_flight_and_cross_tab_rotation(browser_session):
     browser, origin = browser_session
     context = browser.new_context()
@@ -111,6 +113,7 @@ def test_browser_single_flight_and_cross_tab_rotation(browser_session):
         context.close()
 
 
+@pytest.mark.deployment_smoke
 def test_browser_independent_accounts_and_forged_origin(browser_session):
     browser, origin = browser_session
     first_context = browser.new_context()
