@@ -409,9 +409,13 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
 
   const handleRestoreSnapshot = (id: string) => {
     const saved = snapshotStore[id];
-    if (saved) {
-      updateCurrentProject(saved);
+    if (!saved) return;
+    // [공통 화면] 스냅샷은 프로젝트를 바꿔도 남는다. 다른 프로젝트의 스냅샷을 복원하면 지금 프로젝트 문서를 덮어쓰므로 막는다.
+    if (saved.id !== currentProject.id) {
+      pushToast('다른 프로젝트의 스냅샷입니다', [`'${saved.title}' 프로젝트를 연 뒤 복원하세요.`]);
+      return;
     }
+    updateCurrentProject(saved);
   };
 
   // [아이디어 보드] Step 1 처리. 서버는 로그인한 본인만 작성자·투표자·댓글 작성자로 받는다(계약 v2).
