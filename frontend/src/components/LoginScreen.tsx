@@ -60,7 +60,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, initialError 
   }} />;
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-slate-950 p-4 font-sans text-slate-100">
+    <div className="flex h-dvh w-screen items-center justify-center bg-slate-950 p-4 font-sans text-slate-100">
       <div className="w-full max-w-sm space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
         <div className="flex items-center gap-2 font-bold text-indigo-400">
           <Layers className="h-5 w-5" />
