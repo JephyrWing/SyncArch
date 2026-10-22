@@ -39,7 +39,7 @@ import { isValidConnection } from './utils/architecture.ts';
 import { voteCount } from './utils/votes.ts';
 import { updateIdea } from './utils/ideas.ts';
 import { ideaPlacement, removeIdeaSubtree } from './utils/ideaTree.ts';
-import { featureCode } from './utils/features.ts';
+import { featureCode, featureFromIdea } from './utils/features.ts';
 import type {
   StepNumber,
   TeamMember,
@@ -574,21 +574,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
 
     selectedIdeas.forEach((idea) => {
       if (!existingStoryIds.has(idea.id)) {
-        newFeatures.push({
-          id: crypto.randomUUID(),
-          displayCode: `FEAT-${String(count).padStart(2, '0')}`,
-          domain: idea.category === 'problems_goals' ? '정책' : idea.category === 'actors' ? '인증' : '비즈니스',
-          name: idea.title,
-          priority: 'P0',
-          assignee: idea.author ?? '',
-          method: 'POST',
-          endpoint: `/api/v1/core/${idea.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-          requestFields: 'payload: object, userId: UUID',
-          responseFields: 'status: "SUCCESS"',
-          summary: idea.description ?? '',
-          status: 'PLANNED',
-          relatedStoryId: idea.id,
-        });
+        newFeatures.push(featureFromIdea(idea, crypto.randomUUID(), `FEAT-${String(count).padStart(2, '0')}`));
         count++;
       }
     });

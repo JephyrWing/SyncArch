@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { merge3, mergeProject } from './mergeDocument.ts';
+import { featureFromIdea } from './features.ts';
 import type { ArchConnection, ArchNode, ErdColumn, ErdTable, ProjectData } from '../types/index.ts';
 
 const node = (id: string, extra: Partial<ArchNode> = {}): ArchNode => ({
@@ -12,6 +13,24 @@ const project = (fields: Partial<ProjectData> = {}): ProjectData => ({
   id: 'p', title: '설계', summary: '', categoryTag: '', targetDbms: 'mariadb', currentStep: 1,
   stepLocks: { 1: false, 2: false, 3: false, 4: false }, ideas: [], features: [], nodes: [], connections: [],
   archVersions: [], tables: [], updatedAt: 't0', ...fields,
+});
+
+test('FEAT02: simultaneous import keeps accepted UUID, both later field edits and remaps local ERD links', () => {
+  const idea = { id: 'idea', title: 'Import', category: 'problems_goals', author: 'A', description: 'base' } as ProjectData['ideas'][number];
+  const base = project({ ideas: [idea] });
+  const mine = featureFromIdea(idea, 'local-id', 'FEAT-01');
+  const theirs = featureFromIdea(idea, 'accepted-id', 'FEAT-01');
+  const local = project({ ideas: [idea], features: [{ ...mine, summary: 'local edit' }], tables: [{ id:'t', name:'t', comment:'', x:0,y:0,relatedFeatureIds:['local-id'],columns:[{id:'c',name:'c',dataType:'INT',isPrimaryKey:true,isForeignKey:false,isNullable:false,isUnique:false,comment:'',relatedFeatureId:'local-id'}] }] });
+  const remote = project({ ideas: [idea], features: [{ ...theirs, status: 'QA' }] });
+  const before = structuredClone({ base, local, remote });
+  const merged = mergeProject(base, local, remote);
+  assert.equal(merged.features.length,1);
+  assert.equal(merged.features[0].id,'accepted-id');
+  assert.equal(merged.features[0].summary,'local edit');
+  assert.equal(merged.features[0].status,'QA');
+  assert.deepEqual(merged.tables[0].relatedFeatureIds,['accepted-id']);
+  assert.equal(merged.tables[0].columns[0].relatedFeatureId,'accepted-id');
+  assert.deepEqual({ base, local, remote },before);
 });
 
 test('merge3 keeps both sides when they touch different fields of the same item', () => {

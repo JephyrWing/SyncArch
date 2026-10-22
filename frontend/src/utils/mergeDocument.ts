@@ -1,4 +1,5 @@
 import type { ErdTable, ProjectData } from '../types/index.ts';
+import { featureCode, featureFromIdea } from './features.ts';
 
 type Plain = Record<string, unknown>;
 type WithId = Plain & { id: string };
@@ -89,12 +90,43 @@ const repointReferences = (versions: ErdTable[][], tables: ErdTable[]): ErdTable
 
 /** [협업 상태] 프로젝트 문서를 합치고, 한쪽이 지운 노드를 가리키게 된 연결선을 정리한다. */
 export const mergeProject = (base: ProjectData, local: ProjectData, remote: ProjectData): ProjectData => {
+  // 같은 원본을 동시에 가져오면 서버에 먼저 저장된 UUID로 합친다. 이미 존재하던 기능은 건드리지 않는다.
+  const known = new Set(base.features.map(f => f.id));
+  const aliases = new Map<string, string>();
+  const synthetic = [] as ProjectData['features'];
+  const features = local.features.map(f => {
+    if (known.has(f.id) || !f.relatedStoryId) return f;
+    const accepted = remote.features.find(r => !known.has(r.id) && r.id !== f.id && r.relatedStoryId === f.relatedStoryId);
+    const idea = base.ideas.find(i => i.id === f.relatedStoryId);
+    if (!accepted || !idea) return f;
+    aliases.set(f.id, accepted.id);
+    // 가져온 기본값을 공통 조상으로 삼아, 가져온 뒤 수정한 각자의 필드는 기존 3-way 규칙으로 보존한다.
+    synthetic.push(featureFromIdea(idea, accepted.id, accepted.displayCode));
+    return { ...f, id: accepted.id, displayCode: accepted.displayCode };
+  });
+  if (aliases.size) {
+    base = { ...base, features: [...base.features, ...synthetic] };
+    local = { ...local, features, tables: local.tables.map(t => ({ ...t,
+      relatedFeatureIds: [...new Set(t.relatedFeatureIds.map(id => aliases.get(id) ?? id))],
+      columns: t.columns.map(c => c.relatedFeatureId && aliases.has(c.relatedFeatureId)
+        ? { ...c, relatedFeatureId: aliases.get(c.relatedFeatureId) } : c),
+    })) };
+  }
   const merged = merge3(base, local, remote) as ProjectData;
+  const acceptedCodes = new Set(remote.features.map(featureCode));
+  const remoteIds = new Set(remote.features.map(f => f.id));
+  let nextCode = Math.max(0, ...merged.features.map(f => Number(/^FEAT-(\d+)$/.exec(featureCode(f))?.[1] ?? 0))) + 1;
+  // 동시 신규 생성의 표시번호만 재배정한다. 기존/먼저 저장된 기능과 모든 UUID는 그대로 둔다.
+  const uniqueFeatures = merged.features.map(f => {
+    if (known.has(f.id) || remoteIds.has(f.id) || !acceptedCodes.has(featureCode(f))) return f;
+    return { ...f, displayCode: `FEAT-${String(nextCode++).padStart(2, '0')}` };
+  });
   const nodeIds = new Set(merged.nodes.map((node) => node.id));
   const byId = <T extends { id: string }>(list: T[]) => new Map(list.map((item) => [item.id, item]));
   const [baseIdeas, localIdeas, remoteIdeas] = [byId(base.ideas), byId(local.ideas), byId(remote.ideas)];
   return {
     ...merged,
+    features: uniqueFeatures,
     connections: merged.connections.filter((c) => nodeIds.has(c.sourceId) && nodeIds.has(c.targetId)),
     tables: repointReferences([base.tables, local.tables, remote.tables], merged.tables),
     // [협업 상태] 둘 다 투표를 바꿨으면 투표 수를 합쳐진 투표자 목록의 증감에 맞춘다(같은 사람의 중복 투표 방지).

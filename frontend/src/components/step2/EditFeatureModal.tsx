@@ -38,22 +38,22 @@ export function EditFeatureModal({ feature, members, onSave, onClose }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {([['name','기능명'],['domain','도메인'],['endpoint','엔드포인트 경로']] as const).map(([key,label]) =>
           <label key={key} className="text-xs text-slate-300">{label}<input autoFocus={key==='name'} maxLength={key==='name'?120:5000} className={input} value={draft[key]} onChange={e=>update(key,e.target.value)} /></label>)}
-        <label className="text-xs text-slate-300">담당자<select className={input} value={draft.assignee} onChange={e=>update('assignee',e.target.value)}>
+        <label className="text-xs text-slate-300">담당자<select aria-label="담당자" className={input} value={draft.assignee} onChange={e=>update('assignee',e.target.value)}>
           <option value="">미지정</option>
           {[...new Set([draft.assignee,...members.map(m=>m.name)])].filter(Boolean).map(name=><option key={name} value={name}>{name}</option>)}
         </select></label>
-        <label className="text-xs text-slate-300">우선순위<select className={input} value={draft.priority} onChange={e=>update('priority',e.target.value)}>
+        <label className="text-xs text-slate-300">우선순위<select aria-label="우선순위" className={input} value={draft.priority} onChange={e=>update('priority',e.target.value)}>
           <option value="">미지정</option>{['P0','P1','P2'].map(v=><option key={v}>{v}</option>)}
         </select></label>
-        <label className="text-xs text-slate-300">HTTP 메서드<select className={input} value={draft.method} onChange={e=>update('method',e.target.value)}>
+        <label className="text-xs text-slate-300">HTTP 메서드<select aria-label="HTTP 메서드" className={input} value={draft.method} onChange={e=>update('method',e.target.value)}>
           <option value="">미지정</option>{['GET','POST','PUT','PATCH','DELETE'].map(v=><option key={v}>{v}</option>)}
         </select></label>
-        <label className="text-xs text-slate-300">진행상황<select className={input} value={draft.status} onChange={e=>update('status',e.target.value)}>
+        <label className="text-xs text-slate-300">진행상황<select aria-label="진행상황" className={input} value={draft.status} onChange={e=>update('status',e.target.value)}>
           {Object.entries({PLANNED:'계획',IN_PROGRESS:'진행중',QA:'QA 검증',COMPLETED:'완료됨'}).map(([value,label])=><option key={value} value={value}>{label}</option>)}
         </select></label>
       </div>
       {([['requestFields','Request Fields'],['responseFields','Response Fields'],['summary','기능 설명'],['responseStatusCodes','응답 상태 코드']] as const).map(([key,label])=>
-        <label key={key} className="block text-xs text-slate-300">{label}<textarea className={input} rows={2} maxLength={5000} value={draft[key]} onChange={e=>update(key,e.target.value)} /></label>)}
+        <label key={key} className="block text-xs text-slate-300">{label}<textarea aria-label={label} className={input} rows={2} maxLength={5000} value={draft[key]} onChange={e=>update(key,e.target.value)} /></label>)}
       {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
       <div className="flex justify-end gap-2"><button type="button" className="px-3 py-1.5 rounded bg-slate-800 text-xs text-slate-300" onClick={onClose}>취소</button>
         <button type="submit" className="px-3 py-1.5 rounded bg-indigo-600 text-xs text-white">변경 저장</button></div>

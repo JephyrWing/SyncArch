@@ -79,6 +79,47 @@ def test_feat01_all_fields_edit_cancel_validate_save_reload_and_other_account(br
         page.screenshot(path=str(Path(__file__).resolve().parents[2]/'.local/w11-t10-edit.png'))
     finally:a.close();b.close()
 
+def test_feat_delete_confirm_cleans_only_its_erd_references_atomically(browser_session):
+    browser,origin=browser_session;context=browser.new_context()
+    try:
+        page,setup,pid,path=setup_case(context,origin);before=api(setup,'GET',path)['data']
+        page.once('dialog',lambda dialog:dialog.dismiss())
+        page.get_by_title('기능 삭제',exact=True).click()
+        assert api(setup,'GET',path)['data']==before
+        page.once('dialog',lambda dialog:dialog.accept())
+        page.get_by_title('기능 삭제',exact=True).click();saved(page)
+        after=api(setup,'GET',path)['data'];assert after['payload']['features']==[]
+        assert after['version']==before['version']+1
+        expected=deepcopy(before['payload']['tables'])
+        for table in expected:
+            table['relatedFeatureIds']=[]
+            for col in table['columns']:col.pop('relatedFeatureId',None)
+        assert after['payload']['tables']==expected
+    finally:context.close()
+
+def test_feat_import_same_idea_concurrently_never_creates_duplicate_origin(browser_session):
+    browser,origin=browser_session;a,b=browser.new_context(),browser.new_context()
+    try:
+        page,setup,pid,path=setup_case(a,origin)
+        assert api(setup,'POST',f'/api/projects/{pid}/members',{'loginId':'auth-b'})['status']==200
+        remote,_=workspace(b,origin,title=TITLE,login_id='auth-b',project_id=pid)
+        remote.get_by_role('button',name=STEP,exact=True).click()
+        # Root is not imported yet; both users choose it from the same saved base.
+        held=[]
+        for current in [page,remote]:
+            current.route('**'+path,lambda route:held.append(route) if route.request.method=='PUT' else route.continue_())
+            current.get_by_role('button',name='아이디어 선택하여 가져오기',exact=True).click()
+            current.get_by_role('dialog',name='아이디어 가져오기',exact=True).get_by_label('통합 부모',exact=True).check()
+            current.get_by_role('button',name='선택 가져오기',exact=True).click()
+        page.wait_for_timeout(700);assert len(held)==2
+        for route in held:route.continue_()
+        for current in [page,remote]:current.unroute('**'+path)
+        for current in [page,remote]:saved(current)
+        final=api(setup,'GET',path)['data']
+        root=final['payload']['ideas'][0]['id']
+        assert sum(f.get('relatedStoryId')==root for f in final['payload']['features'])==1
+    finally:a.close();b.close()
+
 def test_feat02_select_hidden_descendant_without_vote_threshold_and_no_duplicate(browser_session):
     browser,origin=browser_session;context=browser.new_context()
     try:
@@ -141,5 +182,6 @@ def test_feat03_middle_delete_create_two_accounts_and_reference_preservation(bro
         final=api(setup,'GET',path)['data'];names={f['name'] for f in final['payload']['features']}
         assert {'T10 concurrent A','T10 concurrent B'}<=names
         assert len({f['id'] for f in final['payload']['features']})==5
+        assert len({f['displayCode'] for f in final['payload']['features']})==5
         assert final['payload']['tables']==before['payload']['tables']
     finally:a.close();b.close()
