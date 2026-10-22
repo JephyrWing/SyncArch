@@ -45,7 +45,9 @@ def render(sha):
 
 def deploy(sha):
     docs = render(sha)
-    Path('.local/cloudtype-release.json').write_text(json.dumps(docs, indent=2), encoding='utf-8')
+    output = Path('.local/cloudtype-release.json')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(docs, indent=2), encoding='utf-8')
     request = Request('https://app.cloudtype.io/api/project/gad03302/syncarch/deploy', method='PUT',
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['CLOUDTYPE_TOKEN']},
         data=json.dumps({'request': docs, 'stages': ['main']}).encode())

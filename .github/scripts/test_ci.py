@@ -1,12 +1,13 @@
 """Negative cases for release gates; independent of the product test environment."""
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from check_junit import validate
-from deploy import preflight, render
+from deploy import deploy, preflight, render
 
 
 class ReleaseGateTests(unittest.TestCase):
@@ -57,6 +58,25 @@ class ReleaseGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'main pushes'):
                 preflight()
             remote.assert_not_called()
+
+    def test_deploy_records_configuration_in_a_fresh_checkout(self):
+        previous = Path.cwd()
+        docs = [{'name': 'syncarch-api', 'context': {'git': {'ref': 'a'*40}}}]
+        with tempfile.TemporaryDirectory() as folder:
+            try:
+                os.chdir(folder)
+                with patch('deploy.render', return_value=docs), patch('deploy.build_opener') as opener, \
+                     patch.dict('os.environ', {'CLOUDTYPE_TOKEN': 'test-only'}):
+                    response = opener.return_value.open.return_value.__enter__.return_value
+                    response.status = 204
+                    response.read.return_value = b''
+                    deploy('a'*40)
+                    self.assertEqual(json.loads(Path('.local/cloudtype-release.json').read_text()), docs)
+                    request = opener.return_value.open.call_args.args[0]
+                    self.assertEqual(json.loads(request.data), {'request': docs, 'stages': ['main']})
+                    self.assertEqual(request.full_url, 'https://app.cloudtype.io/api/project/gad03302/syncarch/deploy')
+            finally:
+                os.chdir(previous)
 
     def test_superseded_main_cannot_deploy(self):
         environment = {'CLOUDTYPE_TOKEN': 'test-only', 'DEPLOY_URL': 'https://example.com',
