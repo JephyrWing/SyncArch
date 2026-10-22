@@ -212,13 +212,25 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
       return 40;
     }
   });
+  // 아키텍처는 캔버스 공간을 넓히고, 다른 Step의 개인 너비 설정과 분리한다.
+  const [architectureSidebarWidth, setArchitectureSidebarWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('syncarch_architecture_sidebar_width'));
+      return Number.isFinite(saved) && saved > 0 ? Math.min(65, Math.max(20, saved)) : 30;
+    } catch {
+      return 30;
+    }
+  });
+  const activeSidebarWidth = currentStep === 3 ? architectureSidebarWidth : sidebarWidth;
+  const setActiveSidebarWidth = currentStep === 3 ? setArchitectureSidebarWidth : setSidebarWidth;
+  const sidebarStorageKey = currentStep === 3 ? 'syncarch_architecture_sidebar_width' : 'syncarch_sidebar_width';
   const [mobileTab, setMobileTab] = useState<'editor' | 'canvas'>('editor');
 
   // [공통 화면] 드래그 크기 조절 처리
   const handleStartResize = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startWidth = sidebarWidth;
+    const startWidth = activeSidebarWidth;
     let latestWidth = startWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -227,12 +239,12 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
       const deltaPercent = (deltaX / totalWidth) * 100;
       const newWidth = Math.min(65, Math.max(20, startWidth + deltaPercent));
       latestWidth = newWidth;
-      setSidebarWidth(newWidth);
+      setActiveSidebarWidth(newWidth);
     };
 
     const handleMouseUp = () => {
       try {
-        localStorage.setItem('syncarch_sidebar_width', latestWidth.toString());
+        localStorage.setItem(sidebarStorageKey, latestWidth.toString());
       } catch {}
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -248,9 +260,10 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   };
 
   const handleResetSidebarWidth = () => {
-    setSidebarWidth(40);
+    const defaultWidth = currentStep === 3 ? 30 : 40;
+    setActiveSidebarWidth(defaultWidth);
     try {
-      localStorage.setItem('syncarch_sidebar_width', '40');
+      localStorage.setItem(sidebarStorageKey, defaultWidth.toString());
     } catch {}
   };
 
@@ -409,12 +422,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   );
 
   // [공통 화면] 단계 잠금 전환
-  // shortcut: 서버 계약(W05)은 stepLocks를 읽기 전용으로 보존한다. 저장한 척 되돌아가지 않도록 바꾸지 않고 안내만 한다.
-  // 서버가 잠금 저장을 지원하면 stepLocks를 갱신하던 예전 처리로 되돌린다.
-  const handleToggleLock = (_step: StepNumber) => {
-    pushToast('단계 잠금은 아직 저장되지 않습니다', ['팀 문서 저장 계약에서 단계 잠금은 읽기 전용입니다.']);
-  };
-
   // [공통 화면] 스냅샷 처리
   const handleSaveSnapshot = (name: string) => {
     const id = crypto.randomUUID();
@@ -631,23 +638,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
     });
   };
 
-  const handleSwitchArchVersion = (versionId: string) => {
-    const targetVer = currentProject.archVersions.find((v) => v.id === versionId);
-    if (targetVer) {
-      // [시스템 아키텍처] 저장된 버전의 구성으로 되돌린다. currentArchVersionId는 서버가 읽기 전용으로 보존해서 바꾸지 않는다.
-      updateCurrentProject({
-        nodes: JSON.parse(JSON.stringify(targetVer.nodes)),
-        connections: JSON.parse(JSON.stringify(targetVer.connections)),
-      });
-    }
-  };
-
-  // shortcut: 서버 계약(W05)은 archVersions를 읽기 전용으로 보존한다. 저장한 척 사라지지 않도록 안내만 한다.
-  // 프로젝트 전체 버전 기록은 상단 스냅샷(활동 이력)을 쓴다. 서버가 아키텍처 버전 저장을 지원하면 되돌린다.
-  const handleSaveNewArchVersion = (_versionNumber: string, _label: string, _description: string) => {
-    pushToast('아키텍처 버전은 아직 저장되지 않습니다', ['팀 문서 저장 계약에서 아키텍처 버전은 읽기 전용입니다.']);
-  };
-
   // [ERD 설계] Step 4 처리와 대상 DBMS
   const handleChangeTargetDbms = (dbms: SqlDialect) => {
     setPreviewDbms(dbms);
@@ -763,7 +753,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
           setCurrentStep(step);
         }}
         stepLocks={currentProject.stepLocks}
-        onToggleLock={handleToggleLock}
         teamMembers={people}
         meId={me.id}
         onToggleSpotlight={(id) => setFollowId((prev) => (prev === id || id === me.id ? null : id))}
@@ -841,12 +830,8 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
             onAddConnection={handleAddConnection}
             onUpdateConnection={handleUpdateConnection}
             onDeleteConnection={handleDeleteConnection}
-            archVersions={currentProject.archVersions}
-            currentVersionId={currentProject.currentArchVersionId || currentProject.archVersions[0]?.id || ''}
-            onSwitchVersion={handleSwitchArchVersion}
-            onSaveNewVersion={handleSaveNewArchVersion}
             isLocked={currentProject.stepLocks[3]}
-            sidebarWidth={sidebarWidth}
+            sidebarWidth={architectureSidebarWidth}
             onStartResize={handleStartResize}
             onResetResize={handleResetSidebarWidth}
             mobileTab={mobileTab}

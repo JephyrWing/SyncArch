@@ -35,7 +35,6 @@ interface HeaderProps {
   currentStep: StepNumber;
   onChangeStep: (step: StepNumber) => void;
   stepLocks: Record<StepNumber, boolean>;
-  onToggleLock: (step: StepNumber) => void;
   teamMembers: TeamMember[];
   /** [협업 상태] 내 아바타는 따라가기 대상에서 뺀다. */
   meId?: string;
@@ -71,7 +70,6 @@ export const Header: React.FC<HeaderProps> = ({
   currentStep,
   onChangeStep,
   stepLocks,
-  onToggleLock,
   teamMembers,
   meId,
   onToggleSpotlight,
@@ -370,13 +368,13 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* [공통 화면] 단계 잠금 전환 */}
         <button
-          onClick={() => onToggleLock(currentStep)}
-          className={`p-1.5 rounded-lg border transition-colors ${
+          disabled
+          className={`p-1.5 rounded-lg border transition-colors opacity-40 cursor-not-allowed ${
             stepLocks[currentStep]
               ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
               : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
           }`}
-          title={stepLocks[currentStep] ? '단계 잠금 해제' : '현재 단계 수정 잠금'}
+          title="단계 잠금은 현재 지원하지 않습니다"
         >
           {stepLocks[currentStep] ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
         </button>

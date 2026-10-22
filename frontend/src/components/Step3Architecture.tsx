@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { Layers, Network } from 'lucide-react';
-import type { ArchNode, ArchConnection, ArchCategory, ArchProtocol, ArchVersion, TeamOrg } from '../types/index.ts';
+import type { ArchNode, ArchConnection, ArchCategory, ArchProtocol, TeamOrg } from '../types/index.ts';
 import { ArchSidebarToolbar } from './step3/ArchSidebarToolbar.tsx';
 import { AddConnectionForm } from './step3/AddConnectionForm.tsx';
 import { AddNodeForm } from './step3/AddNodeForm.tsx';
 import { ArchItemList } from './step3/ArchItemList.tsx';
 import { ArchCanvas } from './step3/ArchCanvas.tsx';
-import { SaveVersionModal } from './step3/SaveVersionModal.tsx';
-import { VersionHistoryModal } from './step3/VersionHistoryModal.tsx';
 import { EditNodeModal } from './step3/EditNodeModal.tsx';
 import { EditConnectionModal } from './step3/EditConnectionModal.tsx';
 
@@ -21,10 +19,6 @@ interface Step3ArchitectureProps {
   onAddConnection: (conn: Omit<ArchConnection, 'id'>) => void;
   onUpdateConnection: (id: string, updated: Partial<ArchConnection>) => void;
   onDeleteConnection: (id: string) => void;
-  archVersions: ArchVersion[];
-  currentVersionId: string;
-  onSwitchVersion: (versionId: string) => void;
-  onSaveNewVersion: (versionNumber: string, label: string, description: string) => void;
   isLocked: boolean;
   sidebarWidth: number;
   onStartResize: (e: React.MouseEvent) => void;
@@ -44,10 +38,6 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
   onAddConnection,
   onUpdateConnection,
   onDeleteConnection,
-  archVersions,
-  currentVersionId,
-  onSwitchVersion,
-  onSaveNewVersion,
   isLocked,
   sidebarWidth,
   onStartResize,
@@ -59,8 +49,6 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(nodes[0]?.id || null);
   const [showAddNode, setShowAddNode] = useState(false);
   const [showAddConn, setShowAddConn] = useState(false);
-  const [showSaveVersionModal, setShowSaveVersionModal] = useState(false);
-  const [showVersionListModal, setShowVersionListModal] = useState(false);
   // [시스템 아키텍처] 편집 중인 항목은 id로 들고 있어서, 팀원이 그 사이 지우거나 Step 3를 잠그면 모달이 닫힌다.
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
@@ -90,7 +78,6 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
   });
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || nodes[0];
-  const currentVersion = archVersions.find((v) => v.id === currentVersionId) || archVersions[0];
   const editingNode = nodes.find((n) => n.id === editingNodeId);
   const editingConnection = connections.find((c) => c.id === editingConnectionId);
 
@@ -127,6 +114,7 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* [시스템 아키텍처] 왼쪽 패널: 크기 조절 컴포넌트 목록과 필터 */}
         <div
+          aria-label="아키텍처 편집 패널"
           style={isDesktop ? { width: `${sidebarWidth}%` } : undefined}
           className={`border-r border-slate-800 bg-slate-900/70 flex flex-col h-full overflow-hidden shrink-0 ${
             isDesktop ? 'flex' : (mobileTab === 'editor' ? 'w-full flex' : 'hidden')
@@ -136,11 +124,6 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
             nodeCount={nodes.length}
             connectionCount={connections.length}
             isLocked={isLocked}
-            archVersions={archVersions}
-            currentVersionId={currentVersionId}
-            onSwitchVersion={onSwitchVersion}
-            onOpenSaveVersion={() => setShowSaveVersionModal(true)}
-            onOpenVersionList={() => setShowVersionListModal(true)}
             onToggleAddConn={() => setShowAddConn(!showAddConn)}
             onToggleAddNode={() => setShowAddNode(!showAddNode)}
             searchQuery={searchQuery}
@@ -188,7 +171,7 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
           onMouseDown={onStartResize}
           onDoubleClick={onResetResize}
           className="hidden lg:flex w-1.5 hover:w-2 bg-slate-800 hover:bg-indigo-500 cursor-col-resize transition-all items-center justify-center shrink-0 group z-10 select-none"
-          title="드래그하여 사이드바 너비 조절 (더블클릭 시 40% 리셋)"
+          title="드래그하여 사이드바 너비 조절 (더블클릭 시 30% 리셋)"
         >
           <div className="w-0.5 h-8 bg-slate-600 group-hover:bg-white rounded-full transition-colors" />
         </div>
@@ -202,7 +185,6 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
           <ArchCanvas
             nodes={nodes}
             connections={filteredConnections}
-            currentVersion={currentVersion}
             filterProtocol={filterProtocol}
             onChangeFilterProtocol={setFilterProtocol}
             selectedNodeId={selectedNode?.id}
@@ -235,23 +217,6 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
         />
       )}
 
-      {/* [시스템 아키텍처] 새 아키텍처 버전 저장 모달 */}
-      <SaveVersionModal
-        open={showSaveVersionModal}
-        defaultVersionNumber={`v${archVersions.length + 1}.0`}
-        onSave={onSaveNewVersion}
-        onClose={() => setShowSaveVersionModal(false)}
-      />
-
-      {/* [시스템 아키텍처] 버전 기록 모달 */}
-      {showVersionListModal && (
-        <VersionHistoryModal
-          archVersions={archVersions}
-          currentVersionId={currentVersionId}
-          onSwitchVersion={onSwitchVersion}
-          onClose={() => setShowVersionListModal(false)}
-        />
-      )}
     </div>
   );
 };

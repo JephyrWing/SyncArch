@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { ArchConnection, ArchNode } from '../../types/index.ts';
 import { CATEGORY_META, PROTOCOL_CONFIG } from './archConfig.ts';
 
@@ -68,16 +68,26 @@ export const ArchItemList: React.FC<ArchItemListProps> = ({
             </div>
 
             {!isLocked && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteNode(node.id);
-                }}
-                className="text-slate-600 hover:text-rose-400 p-0.5"
-                title="노드 삭제"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditNode(node.id); }}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  className="text-slate-400 hover:text-indigo-300 p-1 rounded hover:bg-slate-700/60"
+                  title={`${node.name} 노드 편집`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteNode(node.id);
+                  }}
+                  className="text-slate-600 hover:text-rose-400 p-0.5"
+                  title="노드 삭제"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
           </div>
 
@@ -129,13 +139,23 @@ export const ArchItemList: React.FC<ArchItemListProps> = ({
             </div>
 
             {!isLocked && (
-              <button
-                onClick={() => onDeleteConnection(c.id)}
-                className="text-slate-600 hover:text-rose-400 p-0.5"
-                title="연결선 삭제"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditConnection(c.id); }}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  className="text-slate-400 hover:text-sky-300 p-1 rounded hover:bg-slate-800"
+                  title={`${c.label || `${src?.name} → ${tgt?.name}`} 연결선 편집`}
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteConnection(c.id); }}
+                  className="text-slate-600 hover:text-rose-400 p-0.5"
+                  title="연결선 삭제"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             )}
           </div>
         );
