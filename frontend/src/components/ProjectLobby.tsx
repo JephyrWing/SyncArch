@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { FolderOpen, KeyRound, Layers, LogOut, Plus } from 'lucide-react';
 import type { ProjectSummary, SessionUser } from '../types/index.ts';
 import { AccountSettings } from './AccountSettings.tsx';
+import { LobbyProjectDashboard } from './ProjectDashboard.tsx';
+import type { ProjectAccess } from '../hooks/useProjectAccess.ts';
 
 interface ProjectLobbyProps {
+  access: ProjectAccess;
   me: SessionUser;
   projects: ProjectSummary[];
   onOpen: (id: string) => void;
@@ -16,7 +19,7 @@ const card = 'rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3';
 const input = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none';
 
 /** [프로젝트] 로그인 직후 화면. 프로젝트를 만들면 팀장이 되고, 팀원은 팀장이 준 초대 코드로 참가한다. */
-export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen, onCreate, onJoin, onLogout }) => {
+export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen, onCreate, onJoin, onLogout, access }) => {
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [code, setCode] = useState('');
@@ -127,10 +130,10 @@ export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {projects.map((project) => (
-                <li key={project.id}>
+                <li key={project.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                   <button
                     onClick={() => onOpen(project.id)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-left hover:border-indigo-500"
+                    className="w-full rounded-lg text-left hover:text-indigo-300"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold text-white">{project.title}</span>
@@ -144,6 +147,7 @@ export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen
                     </div>
                     {project.summary && <p className="mt-1 truncate text-[11px] text-slate-400">{project.summary}</p>}
                   </button>
+                  <LobbyProjectDashboard projectId={project.id} parentAccess={access} />
                 </li>
               ))}
             </ul>

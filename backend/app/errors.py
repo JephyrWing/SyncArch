@@ -37,13 +37,19 @@ class GoogleAuthenticationFailed(AuthenticationRequired):
 
 class GoogleLinkRequired(ApplicationError):
     code = "GOOGLE_LINK_REQUIRED"
-    message = "기존 계정의 이메일을 등록하거나 로그인 후 Google 계정을 연결해 주세요."
+    message = "Google 계정이 아직 연결되지 않았습니다. 회원가입 또는 기존 계정 로그인 후 Google 연결에서 비밀번호를 확인해 주세요."
     status = 409
 
 
 class IdentityConflict(ApplicationError):
     code = "IDENTITY_CONFLICT"
     message = "이미 연결된 계정 또는 이메일과 충돌합니다. 기존 연결을 확인해 주세요."
+    status = 409
+
+
+class RegistrationConflict(ApplicationError):
+    code = "REGISTRATION_CONFLICT"
+    message = "이미 사용 중인 아이디 또는 이메일입니다. 기존 계정으로 로그인해 주세요."
     status = 409
 
 

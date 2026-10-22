@@ -34,6 +34,10 @@ export const fetchMe = (): Promise<SessionUser> => authClient.me();
 export const loginWithPassword = (loginId: string, password: string): Promise<SessionUser> =>
   authClient.login(loginId, password);
 
+/** [구글 로그인] 공개 가입은 토큰 발급 없이 계정만 생성한다. */
+export const registerAccount = async (body: { loginId: string; displayName: string; password: string; email?: string }): Promise<SessionUser> =>
+  (await request<{ user: SessionUser }>('POST', '/api/auth/register', body)).data!.user;
+
 export const fetchAuthOptions = async (): Promise<{ googleEnabled: boolean }> => {
   const data = (await request<{ google: { enabled: boolean } }>('GET', '/api/auth/options')).data!;
   return { googleEnabled: data.google.enabled };
@@ -42,6 +46,10 @@ export const fetchAuthOptions = async (): Promise<{ googleEnabled: boolean }> =>
 /** [구글 로그인] 서버가 만든 구글 인증 주소. 로그인 후 /auth/callback으로 돌아오며 리프레시 쿠키가 설정된다. */
 export const startGoogleLogin = async (): Promise<string> =>
   (await request<{ authorizationUrl: string }>('POST', '/api/auth/google/start', {})).data!.authorizationUrl;
+
+/** [구글 로그인] 서버가 현재 계정의 비밀번호를 확인한 뒤 명시 연결을 시작한다. */
+export const startGoogleLink = async (password: string): Promise<string> =>
+  (await request<{ authorizationUrl: string }>('POST', '/api/auth/google/link/start', { password })).data!.authorizationUrl;
 
 export const logout = (): Promise<void> => authClient.logout();
 
@@ -67,6 +75,32 @@ export const fetchDocument = async (id: string, knownVersion?: number): Promise<
 
 export const saveDocument = async (id: string, body: SaveDocumentBody): Promise<SaveDocumentResult> =>
   (await request<SaveDocumentResult>('PUT', `/api/projects/${id}/document`, body)).data!;
+
+export interface ProjectActivity {
+  eventId: string;
+  projectId: string;
+  version: number;
+  actorId: string;
+  actorName: string;
+  committedAt: string;
+  changes: { area: string; action: string; label?: string; entityType?: string; entityId?: string }[];
+}
+
+export interface ProjectDashboardData {
+  projectId: string;
+  version: number;
+  counts: Record<'ideas' | 'features' | 'nodes' | 'connections' | 'tables', number>;
+  featureStatuses: Record<string, number>;
+  progress: number;
+  recentActivity: ProjectActivity[];
+}
+
+/** [협업 상태] 진행도와 최근 활동은 한 서버 저장 버전의 집계로 표시한다. */
+export const fetchDashboard = async (id: string): Promise<ProjectDashboardData> =>
+  (await request<ProjectDashboardData>('GET', `/api/projects/${id}/dashboard`)).data!;
+
+export const fetchActivity = async (id: string, beforeVersion: number): Promise<{ items: ProjectActivity[]; nextBeforeVersion: number | null }> =>
+  (await request<{ items: ProjectActivity[]; nextBeforeVersion: number | null }>('GET', `/api/projects/${id}/activity?beforeVersion=${beforeVersion}&limit=20`)).data!;
 
 /** [초대 코드] 팀장만 받는다. 코드가 없던 기존 프로젝트는 이때 만들어진다. */
 export const fetchInviteCode = async (id: string): Promise<string> =>

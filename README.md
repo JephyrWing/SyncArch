@@ -170,6 +170,21 @@ W15는 `app.auth.verify_access_token(token)`의 `(Actor, {sessionId, expiresAt})
 `session_revoked` 신호의 `session_id` 인자를 사용할 수 있습니다. 소켓 연결/이벤트의 Origin·프로젝트 멤버십·보관 정책,
 만료 타이머와 room 수신 중단은 W15에서 별도 구현해야 합니다. 신호 연결만으로 소켓 종료가 구현된 것은 아닙니다.
 
+### 일반 회원가입 (W16)
+
+로그인 화면의 **처음이라면 회원가입**에서 아이디·이름·비밀번호·비밀번호 확인을 입력합니다.
+이메일은 선택이며 인증메일이나 SMTP는 사용하지 않습니다. 가입 완료 후 아이디가 채워진 로그인 화면에서 별도로 로그인합니다.
+프로젝트는 직접 생성하거나 초대 코드로 참여하며 가입만으로 기존 프로젝트 권한을 받지는 않습니다.
+
+`POST /api/auth/register`는 허용 Origin과 JSON `{loginId, displayName, password, email?}`만 받습니다.
+아이디 trim 1~100자·이름 trim 1~80자·신규 비밀번호 8~128자이며 비밀번호 공백은 보존합니다.
+이메일은 기존 정규화/유일성 규칙을 따릅니다. 입력/추가 필드 오류는 400, 아이디·이메일 중복은
+409 `REGISTRATION_CONFLICT`, DB 실패는 503 `DB_UNAVAILABLE`입니다.
+커밋 후 `201 {data:{user:{id,loginId,displayName}}}`을 반환하며 토큰·쿠키·Redis 세션·멤버십은 만들지 않습니다.
+Redis 장애로 후속 로그인이 실패해도 생성한 계정은 유지되므로 다시 가입하지 말고 로그인만 재시도합니다.
+기존 계정은 덮어쓰지 않습니다. Google 최초 연결은 로그인 후 **Google 연결**에서 비밀번호를 다시 확인합니다. 이메일만 일치해 자동 연결하지 않습니다.
+모델·기존 마이그레이션을 재사용하므로 W16 전용 스키마 변경이나 DB 초기화는 필요 없습니다.
+
 ### Google 로그인·계정 연결·이메일 등록 (W03 확장)
 
 `backend/.env`에서 `GOOGLE_OAUTH_ENABLED=true`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
@@ -196,11 +211,12 @@ Google API용 추가 권한이나 Google refresh token을 요청하지 않습니
 추가 확인 필요는 409 `GOOGLE_LINK_REQUIRED`, 계정/이메일 충돌은 409 `IDENTITY_CONFLICT`입니다.
 Redis·provider 장애는 503 `AUTH_UNAVAILABLE`이며 DB 장애는 503 `DB_UNAVAILABLE`입니다.
 
-최초 연결은 Google의 provider+sub를 먼저 조회합니다. 연결이 없을 때만 **앱에 직접 등록한 정규화 이메일**과
-Google의 검증 이메일을 비교하고, Gmail 또는 일치하는 Workspace `hd`가 있어 Google이 소유권을 보증할 때
-유일한 활성 기존 계정에 자동 연결합니다. 외부 도메인은 `email_verified=true`만으로 자동 연결하지 않습니다.
-이 경우 기존 비밀번호 로그인 → 비밀번호 재확인 → 명시적 Google 연결을 사용합니다.
-연결 후 이메일이 바뀌어도 원래 내부 사용자 UUID를 유지합니다. 자동 가입·사용자 행 병합·멤버십 이동은 하지 않습니다.
+Google 로그인은 이미 연결된 provider+sub만 조회합니다. 연결이 없으면 409 `GOOGLE_LINK_REQUIRED`로
+회원가입 또는 기존 계정 로그인 후 **Google 연결**을 안내합니다(DEC-024·CHG-029).
+로그인한 사용자가 SyncArch 비밀번호를 재확인하고 Google OAuth도 통과해야 같은 UUID에 연결됩니다.
+이메일 등록만으로 연결하지 않으며, 공개 가입자가 다른 사람의 이메일을 선점해도 Google 로그인으로 연결되지 않습니다.
+이메일 일치는 명시 연결의 조건이 아닙니다. 프로젝트가 없는 새 계정도 로비에서 Google을 연결할 수 있습니다.
+기존 연결·사용자 UUID·비밀번호·프로젝트·JWT/RTR는 유지합니다. 자체 인증메일·SMTP는 사용하지 않습니다.
 이메일 정규화는 ASCII 공백 제거·소문자화이며 Gmail의 점·`+tag`를 합치지 않습니다.
 
 `0005` migration은 기존 `0004` 뒤에 이메일 3열과 `app_user_identities`를 추가합니다.
@@ -210,7 +226,7 @@ identity는 `(provider, subject)`와 `(user_id, provider)`의 유일성을 DB로
 이메일 변경도 같은 잠금을 사용합니다. `0005` downgrade는 새 이메일/identity만 제거하므로 해당 데이터를 백업해야 합니다.
 CHG-024에 따라 앱 자체의 이메일 인증은 제외합니다. 이미 적용된 `0005`와 nullable `email_verified_at`는
 과거 이력·데이터 호환을 위해 유지합니다. 이 값은 현재 이메일의 인증 여부를 나타내지 않으며,
-직접 등록/수정과 Google 자동 연결에서 읽거나 갱신하지 않습니다. 새 migration이나 DB 초기화는 필요하지 않습니다.
+직접 등록/수정과 Google 연결에서 읽거나 갱신하지 않습니다. 새 migration이나 DB 초기화는 필요하지 않습니다.
 
 Redis의 `auth:oauth:google:<stateHash>`는 바인딩·nonce·PKCE verifier·목적·연결 세션을 TTL 300초로 보관하고
 Lua에서 바인딩 확인과 일회 소비를 함께 처리합니다. 쿠키는 Path `/api/auth/google/`, HttpOnly, SameSite=Lax,
@@ -491,3 +507,15 @@ Vite 검사는 별도 임시 포트에서 `/api` 프록시의 로그인/쿠키·
 제품 UI 검사 전 `frontend`에서 `npm run build`와 위 인증 클라이언트 빌드를 실행하고,
 같은 공통 runner의 `--junitxml .local/w06-mariadb.xml`로 실제 실행 결과를 구분합니다.
 외부 Google 동의·Cloudtype HTTPS 검증은 로컬 provider fixture/프록시 검사와 구분합니다.
+### 프로젝트 현황과 활동 이력
+
+로비의 프로젝트 카드에 서버 저장본의 기능 완료율과 최근 변경을 표시합니다.
+카드 또는 편집 화면 상단의 **현황·활동**에서 영역별 개수·수정자·시각과 이전 활동을 조회합니다.
+진행률은 같은 버전의 `COMPLETED / 전체 기능`이며, 기능이 없으면 0%입니다. 미저장 초안은 집계에 포함하지 않습니다.
+현황은 5초 간격 및 포커스/온라인 복귀에 갱신되고, 편집 화면에서는 저장 문서 버전 변경에도 갱신됩니다.
+숨김 탭은 현황 폴링을 멈춥니다. 활동은 해당 집계 버전 이하를 20개씩 커서로 읽으며 이벤트 ID 중복을 제거합니다.
+프로젝트 전환 뒤의 늦은 응답을 무시하고, 접근 상실 시 기존 공동 중단·초안 백업을 유지합니다.
+로비의 특정 프로젝트 404는 다른 프로젝트 카드의 조회를 막지 않습니다.
+
+실제 React·Flask·MariaDB/Redis 검사는 `backend/tests/test_dashboard_browser.py`에 있습니다.
+프런트 빌드와 인증 클라이언트 번들을 준비한 뒤 공통 runner에 `PYTEST_ADDOPTS='-k dashboard_browser'`를 지정하면 선택 실행할 수 있습니다.
