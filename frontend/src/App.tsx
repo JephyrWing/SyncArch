@@ -16,6 +16,7 @@ import { ProjectLobby } from './components/ProjectLobby.tsx';
 import { InviteButton } from './components/InviteButton.tsx';
 import { ChatPanel } from './components/ChatPanel.tsx';
 import { AccountSettings } from './components/AccountSettings.tsx';
+import { ProjectDashboard } from './components/ProjectDashboard.tsx';
 import { CollabBanner, SaveStatusBadge, ToastStack, type Toast } from './components/CollabStatus.tsx';
 import {
   cloneProject,
@@ -305,6 +306,7 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   const statusSlot = (
     <div className="flex items-center gap-1.5">
       <SaveStatusBadge status={doc.status} version={doc.version} />
+      {currentProjectId && <ProjectDashboard key={currentProjectId} projectId={currentProjectId} access={access} documentVersion={doc.version} />}
       <AccountSettings canNavigate={() => doc.isSafeToLeave()} />
       {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} access={access} />}
       <button
@@ -332,6 +334,7 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
     return (
       <>
         <ProjectLobby
+          access={access}
           me={me}
           projects={projectList}
           onOpen={setCurrentProjectId}
