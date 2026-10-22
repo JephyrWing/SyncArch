@@ -100,6 +100,10 @@ class IdempotencyKeyReused(ApplicationError):
     status = 409
 
 
+class ChatKeyReused(IdempotencyKeyReused):
+    message = "이미 다른 내용을 보낸 clientId입니다. 새 clientId로 보내 주세요."
+
+
 class InviteCodeNotFound(ApplicationError):
     code = "NOT_FOUND"
     message = "초대 코드가 올바르지 않습니다. 팀장에게 최신 코드를 받아 다시 입력해 주세요."

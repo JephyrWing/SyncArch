@@ -6,6 +6,8 @@ import { isAccessError, type ProjectAccess } from './useProjectAccess.ts';
 
 // [채팅] 문서 폴링(1초)과 겹치지 않게 조금 느리게 확인한다.
 const CHAT_POLL_MS = 1500;
+// [채팅] 실패한 전송을 같은 키로 다시 보낼 수 있는 시간.
+const RESEND_WINDOW_MS = 60_000;
 
 /** [채팅] 프로젝트 대화를 불러오고 새 메시지를 폴링한다. */
 export const useChat = (projectId: string | null, access: ProjectAccess) => {
@@ -15,7 +17,7 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
   const [loaded, setLoaded] = useState(false);
   const stateRef = useRef<ChatState>({ messages: [] });
   const generationRef = useRef(0);
-  const pendingRef = useRef<{ projectId: string; body: string; clientId: string } | null>(null);
+  const pendingRef = useRef<{ projectId: string; body: string; clientId: string; at: number } | null>(null);
 
   const commit = (next: ChatState) => {
     stateRef.current = next;
@@ -67,9 +69,11 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
     access.check();
     const generation = generationRef.current;
     // [채팅] 실패해서 같은 내용을 다시 보내면 같은 키를 쓴다. 응답만 잃은 경우 서버가 두 번 저장하지 않는다.
+    // 한참 뒤 같은 짧은 말을 일부러 다시 보내는 경우까지 막지 않도록, 실패 직후의 재전송에만 같은 키를 쓴다.
     const pending = pendingRef.current;
-    const clientId = pending && pending.projectId === projectId && pending.body === body ? pending.clientId : crypto.randomUUID();
-    pendingRef.current = { projectId, body, clientId };
+    const retry = pending && pending.projectId === projectId && pending.body === body && Date.now() - pending.at < RESEND_WINDOW_MS;
+    const clientId = retry ? pending.clientId : crypto.randomUUID();
+    pendingRef.current = { projectId, body, clientId, at: Date.now() };
     try {
       const sent = await sendMessage(projectId, body, clientId);
       if (pendingRef.current?.clientId === clientId) pendingRef.current = null;

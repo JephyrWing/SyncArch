@@ -1,7 +1,7 @@
 """프로젝트 멤버끼리 나누는 채팅입니다."""
 from sqlalchemy.exc import IntegrityError
 
-from ..errors import IdempotencyKeyReused
+from ..errors import ChatKeyReused
 from ..repositories import message_repository as messages
 from .project_access import require_access, require_active_actor
 from .project_service import utc
@@ -33,7 +33,7 @@ def list_messages(session_factory, actor_id, project_id, since=None, after_id=No
 def _existing(session, actor_id, project_id, body, client_id):
     message = messages.find_by_client_id(session, project_id, actor_id, client_id)
     if message is not None and message.body != body:
-        raise IdempotencyKeyReused()
+        raise ChatKeyReused()
     return message
 
 
@@ -53,6 +53,7 @@ def post_message(session_factory, actor_id, project_id, body, client_id=None):
         if client_id is None:
             raise
         with session_factory() as session:
+            require_access(session, actor_id, project_id, write=True)
             actor = require_active_actor(session, actor_id)
             existing = _existing(session, actor_id, project_id, body, client_id)
             if existing is None:

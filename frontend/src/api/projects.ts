@@ -114,7 +114,6 @@ export const regenerateInviteCode = async (id: string): Promise<string> =>
 export const joinProject = async (code: string): Promise<ProjectSummary> =>
   (await request<ProjectSummary>('POST', '/api/projects/join', { code })).data!;
 
-/** [채팅] since가 있으면 그 시각 이후(같은 시각 포함) 메시지만 받는다. */
 /** [채팅] cursor가 있으면 그 메시지 다음부터 받는다. 같은 시각 메시지는 id 순서로 이어 읽는다. */
 export const fetchMessages = async (id: string, cursor?: ChatCursor): Promise<ChatMessage[]> =>
   (await request<ChatMessage[]>('GET', `/api/projects/${id}/messages${cursor

@@ -30,4 +30,7 @@ test('same-time messages keep server (time, id) order and the cursor moves to th
   assert.deepEqual(merged.map((m) => m.id), ['a2', 'b', 'a']);
   assert.deepEqual(state.cursor, { createdAt: '2026-10-21T01:00:00.500000Z', id: 'a' });
   assert.deepEqual(applyPolled(state, []).cursor, state.cursor, 'an empty poll keeps the cursor');
+  // [채팅] 같은 밀리초 안의 마이크로초 차이도 서버 순서를 따른다(id 순서와 반대여도).
+  const micro = mergeMessages([], [message('a', '2026-10-21T01:00:00.000200Z'), message('z', '2026-10-21T01:00:00.000100Z')]);
+  assert.deepEqual(micro.map((m) => m.id), ['z', 'a']);
 });

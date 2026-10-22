@@ -155,6 +155,7 @@ def test_resending_a_chat_message_with_the_same_client_id_saves_it_once(users):
     assert editor.post(url, json={"body": "한 번만", "clientId": key}, headers=eh).status_code == 201
     reused = owner.post(url, json={"body": "다른 내용", "clientId": key}, headers=oh)
     assert reused.status_code == 409 and reused.json["error"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert "clientId" in reused.json["error"]["message"]
     assert owner.post(url, json={"body": "키 없음"}, headers=oh).status_code == 201
     assert owner.post(url, json={"body": "키 없음"}, headers=oh).status_code == 201
     assert owner.post(url, json={"body": "x", "clientId": "not-a-uuid"}, headers=oh).status_code == 400
