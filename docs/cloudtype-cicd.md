@@ -43,6 +43,7 @@ GitHub concurrency는 대기 실행을 최신 대기 실행으로 대체할 수 
 | 기존 mariadb | 현재 서비스와 영속 디스크 유지 | 기존 설정 |
 
 .cloudtype/services.json에는 syncarch-web/기존 syncarch-api만 있다.
+두 서비스의 context.path는 저장소 루트(/)로 명시해 기존 UI의 backend/frontend 서브디렉터리 설정을 초기화한다.
 기존 MariaDB 512 MiB와 앱 두 개 각 256 MiB로 프리티어 1 GiB 범위에 맞춘다.
 프리티어는 매일 중지되므로 상시 가동은 보장되지 않는다.
 MariaDB 생성·초기화·seed·drop·버전 변경은 일반 배포에 포함하지 않는다.
