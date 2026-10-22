@@ -209,10 +209,6 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Real product browser, API concurrency and dump restore
-        run: python .github/scripts/run_backend.py browser
-      - name: Ensure browser tests did not change the release build
-        run: python .github/scripts/frontend_artifact.py verify "${{ github.sha }}"
       - name: Build exact release containers
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -221,6 +217,10 @@ jobs:
           docker build --build-arg "RELEASE_SHA=$SOURCE_SHA" -f deploy/frontend/Dockerfile -t "syncarch-frontend:$SOURCE_SHA" .
       - name: Real Nginx and single process Waitress read/save smoke
         run: python .github/scripts/container_smoke.py
+      - name: Real product browser, API concurrency and dump restore
+        run: python .github/scripts/run_backend.py browser
+      - name: Ensure browser tests did not change the release build
+        run: python .github/scripts/frontend_artifact.py verify "${{ github.sha }}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-images-${{ github.sha }}
