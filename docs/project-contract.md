@@ -37,7 +37,7 @@ If-None-Match: "{projectId}:7"
 }
 ```
 
-메타데이터의 DBMS 등 열거형은 실제 schema 계약을 따른다. 같은 mutationId·같은 본문 재시도는 최초 결과를 반환하고, 같은 키의 다른 본문은 거부한다. 오래된 baseVersion은 409 `VERSION_CONFLICT`, 잘못된 문서는 422 `DOCUMENT_INVALID`, 크기 초과는 413이다. 오류 응답은 `{"error":{"code":"...","message":"..."}}`다. 거부·롤백 시 기존 문서와 활동을 부분 변경하지 않는다.
+메타데이터의 DBMS 등 열거형은 실제 schema 계약을 따른다. 같은 mutationId·같은 본문 재시도는 최초 결과를 반환하고, 같은 키의 다른 본문은 거부한다. 오래된 baseVersion은 409 `VERSION_CONFLICT`, 잘못된 문서는 422 `VALIDATION_FAILED`, 크기 초과는 413 `DOCUMENT_TOO_LARGE`다. 오류 응답은 `{"error":{"code":"...","message":"..."}}`이며 문서 검증 오류에는 `error.fieldErrors`의 `path/message`도 포함한다. 거부·롤백 시 기존 문서와 활동을 부분 변경하지 않는다.
 
 ## 협업·참조·내보내기
 
