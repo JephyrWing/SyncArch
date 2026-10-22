@@ -7,6 +7,7 @@ import subprocess
 from uuid import uuid4
 
 from frontend_artifact import inventory
+from dns_smoke import verify_dns_rotation
 from run_backend import admin
 from smoke import smoke
 
@@ -74,6 +75,7 @@ def main():
             subprocess.run(['docker', 'rm', '-f', container], check=True, stdout=subprocess.DEVNULL)
         with admin() as connection, connection.cursor() as cursor:
             cursor.execute(f'DROP DATABASE IF EXISTS `{name}`')
+    verify_dns_rotation('syncarch-frontend:' + sha)
 
 
 if __name__ == '__main__':

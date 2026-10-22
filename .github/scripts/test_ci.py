@@ -1,16 +1,36 @@
 """Negative cases for release gates; independent of the product test environment."""
 import json
+from io import BytesIO
 import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
 from check_junit import validate
 from deploy import deploy, preflight, render
+from smoke import SmokeFailure, smoke
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_smoke_identifies_failed_endpoint_without_exposing_response_or_credentials(self):
+        responses = []
+        for body in ({'revision': 'a'*40}, {'data': {'revision': 'a'*40}},
+                     {'data': {'status': 'ok', 'database': 'ok'}}):
+            response = MagicMock()
+            response.__enter__.return_value = response
+            response.status = 200
+            response.read.return_value = json.dumps(body).encode()
+            responses.append(response)
+        responses.append(HTTPError('https://example.com/api/auth/login', 401, 'Unauthorized', {},
+                                  BytesIO(b'sensitive response and password')))
+        with patch('smoke.build_opener') as opener:
+            opener.return_value.open.side_effect = responses
+            with self.assertRaises(SmokeFailure) as error:
+                smoke('https://example.com', 'a'*40, 'sensitive-login', 'sensitive-password', timeout=0)
+        self.assertEqual(str(error.exception), 'POST /api/auth/login: HTTP 401, expected 200')
+
     def report(self, xml):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'report.xml'

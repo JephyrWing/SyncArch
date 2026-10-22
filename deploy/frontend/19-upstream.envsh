@@ -1,0 +1,16 @@
+#!/bin/sh
+# Sourced before the image's 20-envsubst script. Nginx's asynchronous resolver
+# does not apply libc's search domains to a short Kubernetes service name.
+set -eu
+authority=${API_UPSTREAM#http://}
+host=${authority%%:*}
+case "$host" in
+    *.*) ;;
+    *)
+        search_domain=$(awk '$1 == "search" {print $2; exit}' /etc/resolv.conf)
+        if [ -n "$search_domain" ] && [ "$search_domain" != "." ]; then
+            API_UPSTREAM="http://${host}.${search_domain}${authority#"$host"}"
+        fi
+        ;;
+esac
+export API_UPSTREAM
