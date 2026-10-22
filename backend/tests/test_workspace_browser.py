@@ -84,6 +84,7 @@ def test_email_ui_password_duplicate_save_and_draft_preservation(browser_session
         context.close()
 
 
+@pytest.mark.deployment_smoke
 def test_two_account_product_edit_save_refresh_and_remote_poll(browser_session):
     """TC-SAVE-01·COL-01: 실제 편집 UI 저장을 다른 독립 계정과 새로고침 뒤 확인합니다."""
     browser, origin = browser_session

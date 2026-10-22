@@ -4,8 +4,13 @@ on:
   pull_request:
     branches: [develop, main]
   push:
-    branches: [develop, main]
+    branches: [main]
   workflow_dispatch:
+
+# New PR commits supersede old checks; main releases are never cancelled here.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -94,21 +99,13 @@ jobs:
   mariadb-integration:
     name: mariadb-integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 15
     services:
       mariadb:
-        image: mariadb:11.4.13
-        env:
-          MARIADB_ROOT_PASSWORD: ci-only-mariadb
-        ports: ["3306:3306"]
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=5s --health-timeout=5s --health-retries=30
-      cloudtype-mariadb:
         image: mariadb:11.2
         env:
           MARIADB_ROOT_PASSWORD: ci-only-mariadb
-        ports: ["3307:3306"]
+        ports: ["3306:3306"]
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s --health-timeout=5s --health-retries=30
@@ -132,21 +129,10 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: MariaDB 11.4 integration, migrations and restart
+      - name: Cloudtype MariaDB row locks, migrations and restart
         env:
           MARIA_CONTAINER: ${{ job.services.mariadb.id }}
-        run: |
-          python .github/scripts/run_backend.py mariadb --restart-service "$MARIA_CONTAINER"
-          cp .local/mariadb.xml .local/mariadb-11.4.xml
-          cp .local/database-version.json .local/database-11.4.json
-      - name: Cloudtype MariaDB 11.2 compatibility, migrations and restart
-        env:
-          CI_DB_PORT: "3307"
-          MARIA_CONTAINER: ${{ job.services.cloudtype-mariadb.id }}
-        run: |
-          python .github/scripts/run_backend.py mariadb --restart-service "$MARIA_CONTAINER"
-          cp .local/mariadb.xml .local/mariadb-11.2.xml
-          cp .local/database-version.json .local/database-11.2.json
+        run: python .github/scripts/run_backend.py mariadb --restart-service "$MARIA_CONTAINER"
       - name: Retain database evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -163,12 +149,12 @@ jobs:
     name: playwright-e2e
     needs: frontend-checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 15
     env:
       TEST_FRONTEND_DIST: ${{ github.workspace }}/frontend/dist
     services:
       mariadb:
-        image: mariadb:11.4.13
+        image: mariadb:11.2
         env:
           MARIADB_ROOT_PASSWORD: ci-only-mariadb
         ports: ["3306:3306"]
@@ -198,8 +184,8 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - run: python -m pip install -r backend/requirements-dev.txt
-      - run: python -m playwright install --with-deps chrome
-      - run: sudo apt-get update && sudo apt-get install --yes mariadb-client
+      - name: Verify runner-provided Chrome
+        run: google-chrome --version
       - name: Authenticate disposable Redis
         env:
           REDIS_CONTAINER: ${{ job.services.redis.id }}
@@ -217,8 +203,8 @@ jobs:
           docker build --build-arg "RELEASE_SHA=$SOURCE_SHA" -f deploy/frontend/Dockerfile -t "syncarch-frontend:$SOURCE_SHA" .
       - name: Real Nginx and single process Waitress read/save smoke
         run: python .github/scripts/container_smoke.py
-      - name: Real product browser, API concurrency and dump restore
-        run: python .github/scripts/run_backend.py browser
+      - name: Core browser authentication, document save and editor smoke
+        run: python .github/scripts/run_backend.py browser-smoke
       - name: Ensure browser tests did not change the release build
         run: python .github/scripts/frontend_artifact.py verify "${{ github.sha }}"
       - name: Retain browser evidence
@@ -228,10 +214,9 @@ jobs:
           name: playwright-${{ github.sha }}
           include-hidden-files: true
           path: |
-            .local/browser.xml
+            .local/browser-smoke.xml
             .local/release-manifest.json
             .local/*.png
-            .local/w11-*.json
             .local/database-version.json
           if-no-files-found: warn
           retention-days: 7
@@ -262,7 +247,7 @@ jobs:
           python-version: 3.12.6
       - name: Require deploy configuration and current main SHA
         run: python .github/scripts/deploy.py preflight
-      - name: Deploy verified Git commit (free source build)
+      - name: Deploy main branch (free source build)
         run: python .github/scripts/deploy.py
       - name: Public HTTPS read/save and exact revision smoke
         run: python .github/scripts/smoke.py

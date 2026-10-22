@@ -1,4 +1,4 @@
-"""Deploy the CI-verified Git commit; Cloudtype builds privately from source.
+"""Deploy the main branch; verify its public revision against the passing CI run.
 
 Cloudtype request contract follows the official deploy action at
 cloudtype-github-actions/deploy@43cf563907c5451c12ecc4461bdbf02e61528d1d/src/action.ts.
@@ -32,13 +32,15 @@ def preflight():
 
 def render(sha):
     if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha):
-        raise ValueError('Cloudtype must deploy a full immutable Git commit SHA')
+        raise ValueError('Release revision must be a full Git commit SHA')
     docs = json.loads(Path('.cloudtype/services.json').read_text(encoding='utf-8'))
     assert {doc['name'] for doc in docs} == {'syncarch-web', 'syncarch-api'}
     for doc in docs:
         assert doc['app'] == 'dockerfile'
         assert doc['context']['git']['url'] == 'https://github.com/JephyrWing/SyncArch.git'
-        doc['context']['git']['ref'] = sha
+        # Cloudtype's generated workflow sends github.ref (refs/heads/main).
+        # A bare "main" is not retained as the branch in its service settings.
+        doc['context']['git']['ref'] = 'refs/heads/main'
         doc['options']['env'].append({'name': 'RELEASE_SHA', 'value': sha})
     return docs
 
@@ -59,7 +61,7 @@ def deploy(sha):
                 raise RuntimeError('Cloudtype rejected deployment; inspect its service events')
     except (HTTPError, URLError):
         raise RuntimeError('Cloudtype deployment failed; response contents suppressed') from None
-    print('Cloudtype accepted the verified Git commit; source rebuild and public smoke are still required')
+    print('Cloudtype accepted the main branch deployment; source rebuild and public smoke are still required')
 
 
 if __name__ == '__main__':

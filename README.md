@@ -12,7 +12,7 @@ JWT 인증·Redis RT 회전과 프로젝트·멤버·문서 원자 저장·활�
 
 GitHub Actions의 네 필수 검사와 Cloudtype 배포 설정은
 [CI/CD 운영 안내](docs/cloudtype-cicd.md)에 있습니다.
-develop/PR에서는 검사만 수행합니다. 네 검사를 통과한 main push의 커밋 SHA를 Cloudtype에 지정해 소스에서 빌드하고 공개 저장·조회 검증을 수행합니다.
+develop/PR에서는 검사만 수행합니다. 네 검사를 통과한 main push에서 Cloudtype의 main 브랜치를 빌드하고, 공개 릴리스 SHA와 저장·조회 동작을 검증합니다.
 
 ```text
 frontend/
