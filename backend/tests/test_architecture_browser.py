@@ -1,5 +1,6 @@
 """W08: TC-ARCH-01/02 and architecture portion of TC-SAFE-01, real React/API/SQL."""
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from playwright.sync_api import expect
@@ -235,3 +236,36 @@ def test_architecture_create_node_and_connection_with_product_forms(browser_sess
         assert document(setup, pid)["payload"] == before
     finally:
         context.close()
+
+
+def test_architecture_optional_step_follow_is_personal_and_releasable(browser_session):
+    """W08 remaining acceptance: two real accounts follow Steps without saving/locking the design."""
+    browser, origin = browser_session
+    owner_context = browser.new_context(viewport={"width": 1600, "height": 1000})
+    editor_context = browser.new_context(viewport={"width": 1600, "height": 1000})
+    try:
+        owner, setup, pid, _, _ = fixture(owner_context, origin)
+        auth = open_page(editor_context, origin)
+        sign_in(auth, "auth-b")
+        editor = editor_context.new_page()
+        enter(editor, origin)
+        before = document(setup, pid)
+        teammate = owner.get_by_title(re.compile("검증 B.*이 사람 화면 따라가기"))
+        expect(teammate).to_be_enabled(timeout=10000)
+        teammate.click()
+        expect(owner.get_by_text("검증 B 따라가는 중", exact=True)).to_be_visible()
+        editor.get_by_role("button", name="Step 2. 기능·API 명세", exact=True).click()
+        expect(owner.get_by_title(re.compile("검증 B.*Step 2.*따라가기 끄기"))).to_be_visible(timeout=10000)
+        expect(owner.get_by_text("현재 아키텍처", exact=True)).to_have_count(0)
+        owner.get_by_title(re.compile("검증 B.*따라가기 끄기")).click()
+        expect(owner.get_by_text("검증 B 따라가는 중", exact=True)).to_have_count(0)
+        owner.get_by_role("button", name="Step 3. 시스템 아키텍처", exact=True).click()
+        expect(owner.get_by_text("현재 아키텍처", exact=True)).to_be_visible()
+        editor.get_by_role("button", name="Step 1. 아이디어 보드", exact=True).click()
+        expect(owner.get_by_title(re.compile("검증 B.*Step 1"))).to_be_visible(timeout=10000)
+        expect(owner.get_by_text("현재 아키텍처", exact=True)).to_be_visible()
+        assert document(setup, pid)["version"] == before["version"]
+        assert document(setup, pid)["payload"] == before["payload"]
+    finally:
+        owner_context.close()
+        editor_context.close()
