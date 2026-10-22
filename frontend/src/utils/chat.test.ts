@@ -32,3 +32,12 @@ test('COL07: cursor includes ID at equal timestamps and sends cannot advance it'
   assert.equal(state.cursorId,'c');
   assert.deepEqual(state.messages.map(m=>m.id),['a','b','c','z']);
 });
+
+test('server time strings without a fraction still sort by time, then by id like the server', () => {
+  // [채팅] 서버는 소수 0인 시각을 '...:00Z'로 보낸다. 문자열 그대로 비교하면 '...:00.5Z'보다 뒤로 간다.
+  const merged = mergeMessages([], [
+    message('b', '2026-10-21T01:00:00.500000Z'), message('a', '2026-10-21T01:00:00Z'),
+    message('z', '2026-10-21T01:00:00.000100Z'), message('y', '2026-10-21T01:00:00.000200Z'),
+  ]);
+  assert.deepEqual(merged.map((m) => m.id), ['a', 'z', 'y', 'b']);
+});

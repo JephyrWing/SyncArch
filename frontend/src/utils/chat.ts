@@ -1,11 +1,18 @@
 import type { ChatMessage } from '../types/index.ts';
 
-/** [채팅] 서버는 같은 시각 메시지를 다시 보낼 수 있다. id로 거르고 시각 순으로 붙인다. */
+// [채팅] 서버는 소수 0인 시각을 '…:00Z'로, 나머지는 마이크로초까지 보낸다. 6자리로 맞추면 문자열 비교가 시각 순서가 된다.
+const timeKey = (createdAt: string) =>
+  createdAt.replace(/(?:\.(\d+))?Z$/, (_, fraction = '') => `.${fraction.padEnd(6, '0')}Z`);
+
+/** [채팅] 서버는 같은 시각 메시지를 다시 보낼 수 있다. id로 거르고 서버와 같은 (시각, id) 순으로 붙인다. */
 export const mergeMessages = (current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] => {
   const known = new Set(current.map((message) => message.id));
   const fresh = incoming.filter((message) => !known.has(message.id));
   if (fresh.length === 0) return current;
-  return [...current, ...fresh].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  return [...current, ...fresh].sort((a, b) => {
+    const [ta, tb] = [timeKey(a.createdAt), timeKey(b.createdAt)];
+    return ta < tb ? -1 : ta > tb ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 };
 
 export interface ChatState {

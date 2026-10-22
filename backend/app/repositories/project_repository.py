@@ -9,6 +9,11 @@ def find_project(session, project_id, *, lock=False):
     return session.scalar(query.with_for_update() if lock else query)
 
 
+def find_by_invite_code(session, code, *, lock=False):
+    query = select(Project).where(Project.invite_code == code)
+    return session.scalar(query.with_for_update() if lock else query)
+
+
 def find_document(session, project_id, *, lock=False):
     query = select(ProjectDocument).where(ProjectDocument.project_id == project_id)
     return session.scalar(query.with_for_update() if lock else query)
