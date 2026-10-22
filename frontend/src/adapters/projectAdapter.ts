@@ -20,8 +20,17 @@ export const toProjectData = (view: DocumentView, currentStep: StepNumber): Proj
   currentStep,
   stepLocks: view.payload.stepLocks ?? DEFAULT_LOCKS,
   ideas: view.payload.ideas,
-  features: view.payload.features,
-  nodes: view.payload.nodes,
+  features: view.payload.features.map((feature) => ({
+    ...feature,
+    domain: feature.domain ?? '', assignee: feature.assignee ?? '', endpoint: feature.endpoint ?? '',
+    requestFields: feature.requestFields ?? '', responseFields: feature.responseFields ?? '',
+    summary: feature.summary ?? '', responseStatusCodes: feature.responseStatusCodes ?? [],
+    // PLANNED는 서버의 기본 상태다. method·priority에는 의미를 만들어 넣지 않는다.
+    status: feature.status ?? 'PLANNED',
+  })),
+  nodes: view.payload.nodes.map((node) => ({
+    ...node, techStack: node.techStack ?? [], description: node.description ?? '',
+  })),
   connections: view.payload.connections,
   // [ERD 설계] 서버에서 생략 가능한 표시 필드를 채워 API로 만든 최소 문서도 편집할 수 있게 한다.
   tables: view.payload.tables.map((table) => ({

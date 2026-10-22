@@ -17,13 +17,13 @@ export const EditNodeModal: React.FC<EditNodeModalProps> = ({ node, onSave, onCl
   const [opened] = useState(() => ({
     name: node.name.trim(),
     category: node.category,
-    assignedTeam: node.assignedTeam || ('Backend' as AssignedTeam),
+    assignedTeam: node.assignedTeam,
     techStack: node.techStack,
     description: (node.description || '').trim(),
   }));
   const [name, setName] = useState(opened.name);
   const [category, setCategory] = useState<ArchCategory>(opened.category);
-  const [assignedTeam, setAssignedTeam] = useState<AssignedTeam>(opened.assignedTeam);
+  const [assignedTeam, setAssignedTeam] = useState<AssignedTeam | ''>(opened.assignedTeam ?? '');
   const [techStack, setTechStack] = useState(opened.techStack.join(', '));
   const [description, setDescription] = useState(opened.description);
 
@@ -33,7 +33,7 @@ export const EditNodeModal: React.FC<EditNodeModalProps> = ({ node, onSave, onCl
     const patch = changedFields(opened, {
       name: name.trim(),
       category,
-      assignedTeam,
+      assignedTeam: assignedTeam || undefined,
       techStack: techStack.split(',').map((s) => s.trim()).filter(Boolean),
       description: description.trim(),
     });
@@ -98,6 +98,7 @@ export const EditNodeModal: React.FC<EditNodeModalProps> = ({ node, onSave, onCl
                 onChange={(e) => setAssignedTeam(e.target.value as AssignedTeam)}
                 className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
               >
+                <option value="" disabled>미지정</option>
                 <option value="Backend">Backend</option>
                 <option value="Frontend">Frontend</option>
                 <option value="Infra">Infra</option>

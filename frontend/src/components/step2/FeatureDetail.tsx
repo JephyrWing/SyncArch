@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Code2, Play, X } from 'lucide-react';
 import type { FeatureSpec } from '../../types/index.ts';
-import { METHOD_COLORS, STATUS_BADGES } from './featureConfig.ts';
+import { methodBadge, STATUS_BADGES } from './featureConfig.ts';
 import { SequenceFlow } from './SequenceFlow.tsx';
 
 interface FeatureDetailProps {
@@ -59,8 +59,8 @@ export const FeatureDetail: React.FC<FeatureDetailProps> = ({ feature: selectedF
       <div className="p-3 sm:p-4 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between shrink-0 flex-wrap gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs px-2 py-0.5 rounded font-mono font-bold border ${METHOD_COLORS[selectedFeature.method].bg} ${METHOD_COLORS[selectedFeature.method].text} ${METHOD_COLORS[selectedFeature.method].border}`}>
-              {selectedFeature.method}
+            <span className={`text-xs px-2 py-0.5 rounded font-mono font-bold border ${methodBadge(selectedFeature.method).bg} ${methodBadge(selectedFeature.method).text} ${methodBadge(selectedFeature.method).border}`}>
+              {selectedFeature.method ?? '미지정'}
             </span>
             <span className="text-xs sm:text-sm font-bold text-white font-mono break-all">{selectedFeature.endpoint}</span>
             <span className={`text-[10px] px-2 py-0.5 rounded border ${STATUS_BADGES[selectedFeature.status].bg} ${STATUS_BADGES[selectedFeature.status].text} ${STATUS_BADGES[selectedFeature.status].border}`}>

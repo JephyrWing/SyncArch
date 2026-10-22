@@ -127,7 +127,7 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   }, []);
 
   // [협업 상태] 접속 중인 멤버와 보고 있는 단계. 아바타를 누르면 그 멤버의 단계를 따라간다.
-  const online = usePresence(currentProjectId, currentStep, access);
+  const { online, confirmed: presenceConfirmed } = usePresence(currentProjectId, currentStep, access);
 
   // [멤버 관리] 예전 하드코딩 팀 목록 대신 실제 멤버를 쓴다.
   // 화면을 연 뒤 초대 코드로 참가한 팀원이 접속하면 목록에 없으므로 그때 다시 불러온다.
@@ -146,6 +146,9 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
     return () => { alive = false; };
   }, [currentProjectId, hasUnknownOnline, access]);
   const [followId, setFollowId] = useState<string | null>(null);
+  useEffect(() => {
+    if (presenceConfirmed && followId && !online.some((entry) => entry.userId === followId)) setFollowId(null);
+  }, [online, presenceConfirmed, followId]);
   const people: TeamMember[] = teamMembers.map((member) => {
     const entry = online.find((o) => o.userId === member.id);
     return { ...member, isOnline: Boolean(entry), currentStep: entry?.step ?? member.currentStep, isSpotlight: member.id === followId };

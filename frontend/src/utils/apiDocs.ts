@@ -13,6 +13,7 @@ export const generateOpenApiJson = (features: FeatureSpec[]) => {
   const paths: Record<string, any> = {};
 
   features.forEach((f) => {
+    if (!f.method || !f.endpoint) return;
     const methodKey = f.method.toLowerCase();
     if (!paths[f.endpoint]) {
       paths[f.endpoint] = {};
@@ -76,6 +77,7 @@ export const generateOpenApiYaml = (features: FeatureSpec[]) => {
   ];
 
   features.forEach((f) => {
+    if (!f.method || !f.endpoint) return;
     lines.push(`  ${f.endpoint}:`);
     lines.push(`    ${f.method.toLowerCase()}:`);
     lines.push(`      summary: "${f.name}"`);
@@ -111,12 +113,12 @@ export const generateMarkdownTable = (features: FeatureSpec[]) => {
   ];
 
   features.forEach((f) => {
-    lines.push(`| ${f.domain} | **${f.method}** | \`${f.endpoint}\` | ${f.name} | ${f.priority} | ${FEATURE_STATUS_LABELS[f.status]} | ${f.assignee} |`);
+    lines.push(`| ${f.domain} | **${f.method ?? '미지정'}** | \`${f.endpoint}\` | ${f.name} | ${f.priority ?? '미지정'} | ${FEATURE_STATUS_LABELS[f.status]} | ${f.assignee} |`);
   });
 
   lines.push('', '## 엔드포인트별 상세 입출력 명세', '');
   features.forEach((f) => {
-    lines.push(`### [${f.method}] ${f.endpoint} - ${f.name}`);
+    lines.push(`### [${f.method ?? '미지정'}] ${f.endpoint} - ${f.name}`);
     lines.push(`- **설명**: ${f.summary}`);
     lines.push(`- **요청 파라미터**: \`${f.requestFields}\``);
     lines.push(`- **응답 필드**: \`${f.responseFields}\``);
