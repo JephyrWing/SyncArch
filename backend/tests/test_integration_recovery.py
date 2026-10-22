@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import time
 from urllib.error import HTTPError
@@ -119,18 +120,21 @@ def test_dump_restore_to_separate_database_and_fresh_flask_preserves_document_an
     with auth_app.app_context():url=db.engine.url; names=inspect(db.engine).get_table_names()
     assert re.fullmatch(r'syncarch_test_[a-f0-9]{32}',url.database or '')
     binary=Path(os.environ.get('TEST_MARIADB_BIN',ROOT/'.local/w08-tools/mariadb-11.4.13-winx64/bin'))
-    assert (binary/'mariadb-dump.exe').is_file(),'TEST_MARIADB_BIN must point to MariaDB11.4 tools'
+    suffix = '.exe' if os.name == 'nt' else ''
+    dump_binary = str(binary / ('mariadb-dump' + suffix)) if (binary / ('mariadb-dump' + suffix)).is_file() else shutil.which('mariadb-dump')
+    client_binary = str(binary / ('mariadb' + suffix)) if (binary / ('mariadb' + suffix)).is_file() else shutil.which('mariadb')
+    assert dump_binary and client_binary, 'TEST_MARIADB_BIN or PATH must provide MariaDB dump/client tools'
     config=tmp_path/'client.cnf'
     config.write_text(f'[client]\nhost={url.host}\nport={url.port}\nuser={url.username}\npassword={url.password}\nprotocol=tcp\ndefault-character-set=utf8mb4\n',encoding='utf-8')
     dump=tmp_path/'restore.sql'
     with dump.open('wb') as output:
-        result=subprocess.run([str(binary/'mariadb-dump.exe'),f'--defaults-extra-file={config}','--single-transaction','--skip-comments',url.database],stdout=output,stderr=subprocess.PIPE)
+        result=subprocess.run([dump_binary,f'--defaults-extra-file={config}','--single-transaction','--skip-comments',url.database],stdout=output,stderr=subprocess.PIPE)
     assert result.returncode==0,'mariadb-dump failed (credentials suppressed)'
     target='syncarch_test_'+uuid4().hex;admin=create_engine(url.set(database=None),isolation_level='AUTOCOMMIT');restored=None
     try:
         with admin.connect() as c:c.exec_driver_sql(f'CREATE DATABASE `{target}` CHARACTER SET utf8mb4')
         with dump.open('rb') as source:
-            result=subprocess.run([str(binary/'mariadb.exe'),f'--defaults-extra-file={config}',target],stdin=source,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            result=subprocess.run([client_binary,f'--defaults-extra-file={config}',target],stdin=source,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         assert result.returncode==0,'MariaDB restore failed (credentials suppressed)'
         restored=create_app({'TESTING':True,'SQLALCHEMY_DATABASE_URI':url.set(database=target),'JWT_SECRET_KEY':auth_app.config['JWT_SECRET_KEY'],'ALLOWED_ORIGINS':[origin]})
         restored.extensions['token_repository']=auth_app.extensions['token_repository']
