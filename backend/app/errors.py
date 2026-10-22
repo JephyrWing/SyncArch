@@ -116,7 +116,8 @@ def register_error_handlers(app):
     def google_callback_error(code):
         # Browser navigation must leave the consumed OAuth code/state URL even on failure.
         # JSON API consumers keep their existing status/error contract.
-        if request.endpoint == 'social_auth.callback' and request.accept_mimetypes.best == 'text/html':
+        if (request.endpoint == 'social_auth.callback'
+                and request.accept_mimetypes['text/html'] > request.accept_mimetypes['application/json']):
             response = redirect(app.config['AUTH_FRONTEND_ORIGIN'] + '/auth/callback?error=' + code, code=303)
             response.delete_cookie('syncarch_google_binding', path='/api/auth/google/')
             response.headers['Cache-Control'] = 'no-store'
