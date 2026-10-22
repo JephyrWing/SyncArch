@@ -1,144 +1,138 @@
-import React, { useState } from 'react';
-import { Award, Check, Edit3, HelpCircle as QuestionIcon, X } from 'lucide-react';
-import type { DecisionStatus, IdeaCard, TeamMember } from '../../types/index.ts';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, Edit3, X } from 'lucide-react';
+import type { DecisionStatus, IdeaCard, IdeaCategory } from '../../types/index.ts';
+import { CATEGORY_META, STATUS_META } from './ideaConfig.ts';
 
 interface EditDecisionModalProps {
   card: IdeaCard;
-  teamMembers: TeamMember[];
+  currentCard?: IdeaCard;
+  initialDecisionStatus?: DecisionStatus;
   isLocked: boolean;
   onUpdateCard: (id: string, updated: Partial<IdeaCard>) => void;
   onClose: () => void;
 }
 
-// [아이디어 보드] 열 때마다 새로 마운트되어 카드 값으로 입력을 채운다(분리 전 열기 동작과 같음).
+// [아이디어 보드] 임시 입력은 모달에 두고 적용할 때 변경한 항목만 공유 상태에 전달한다.
 export const EditDecisionModal: React.FC<EditDecisionModalProps> = ({
-  card: editingCard,
-  teamMembers,
-  isLocked,
-  onUpdateCard,
-  onClose,
+  card, currentCard, initialDecisionStatus, isLocked, onUpdateCard, onClose,
 }) => {
-  const [editRationale, setEditRationale] = useState(editingCard.rationale || '');
-  const [editDecisionReason, setEditDecisionReason] = useState(editingCard.decisionReason || '');
-  const [editDecisionStatus, setEditDecisionStatus] = useState<DecisionStatus>(editingCard.decisionStatus || 'REVIEW');
-  // [아이디어 보드] 서버는 채택·보류에 결정 사유를 요구한다.
-  const reasonMissing = (editDecisionStatus === 'ACCEPTED' || editDecisionStatus === 'DEFERRED') && !editDecisionReason.trim();
-  const [editDecidedBy, setEditDecidedBy] = useState(editingCard.decidedBy || teamMembers[0]?.name || '현우');
+  const [original] = useState({
+    title: card.title,
+    description: card.description || '',
+    category: card.category,
+    rationale: card.rationale || '',
+    decisionStatus: card.decisionStatus || 'REVIEW',
+    decisionReason: card.decisionReason || '',
+  });
+  const [draft, setDraft] = useState({ ...original, decisionStatus: initialDecisionStatus || original.decisionStatus });
+  const titleRef = useRef<HTMLInputElement>(null);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const disabled = isLocked || !currentCard;
+  const length = (text: string) => Array.from(text.trim()).length;
+  const reasonRequired = draft.decisionStatus === 'ACCEPTED' || draft.decisionStatus === 'DEFERRED';
+  const errors = {
+    title: !draft.title.trim() ? '제목을 입력하세요.' : length(draft.title) > 120 ? '제목은 120자 이하로 입력하세요.' : '',
+    description: length(draft.description) > 5000 ? '설명은 5,000자 이하로 입력하세요.' : '',
+    rationale: length(draft.rationale) > 5000 ? '제안 배경은 5,000자 이하로 입력하세요.' : '',
+    decisionReason: reasonRequired && !draft.decisionReason.trim() ? '채택·보류에는 결정 사유가 필요합니다.'
+      : length(draft.decisionReason) > 5000 ? '결정 사유는 5,000자 이하로 입력하세요.' : '',
+  };
+  const invalid = Object.values(errors).some(Boolean);
+  const inputClass = 'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none disabled:opacity-50';
 
-  const handleSaveEditModal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLocked) return;
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    (initialDecisionStatus ? reasonRef.current : titleRef.current)?.focus();
+    return () => previous?.focus();
+  }, []);
 
-    onUpdateCard(editingCard.id, {
-      rationale: editRationale.trim() || undefined,
-      decisionReason: editDecisionReason.trim() || undefined,
-      decisionStatus: editDecisionStatus,
-      decidedBy: editDecidedBy.trim() || undefined,
-    });
-
+  const handleApply = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (disabled || invalid) return;
+    const changes: Partial<IdeaCard> = {};
+    // [아이디어 보드] 편집하지 않은 필드는 전송하지 않아 열린 동안 받은 팀원 변경을 보존한다.
+    for (const field of ['title', 'description', 'rationale', 'decisionReason'] as const) {
+      if (draft[field] !== original[field]) changes[field] = draft[field].trim();
+    }
+    if (draft.decisionStatus !== original.decisionStatus) changes.decisionStatus = draft.decisionStatus;
+    if (!currentCard.parentIdeaId && draft.category !== original.category) changes.category = draft.category;
+    if (Object.keys(changes).length) onUpdateCard(card.id, changes);
     onClose();
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      onClose();
+    }
+    if (event.key !== 'Tab') return;
+    const controls = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)');
+    if (!controls?.length) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden text-slate-100">
-        <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-              <Edit3 className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white">아이디어 발의 배경 및 결정 사유 기록</h4>
-              <p className="text-[11px] text-slate-400 truncate max-w-sm font-mono mt-0.5">
-                {editingCard.title}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="idea-edit-heading" onKeyDown={handleKeyDown}
+        className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950 p-4">
+          <h2 id="idea-edit-heading" className="flex items-center gap-2 text-sm font-bold"><Edit3 className="h-4 w-4 text-indigo-400" />아이디어 수정</h2>
+          <button type="button" aria-label="수정 닫기" onClick={onClose} className="rounded p-1 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
-
-        <form onSubmit={handleSaveEditModal} className="p-4 sm:p-5 space-y-4">
-          {/* [아이디어 보드] 질문 1: 왜 제안했나? */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <QuestionIcon className="w-3.5 h-3.5" />
-              <span>1. 왜 그런 아이디어를 냈는가? (제안 배경 &amp; 문제 가설)</span>
-            </label>
-            <p className="text-[11px] text-slate-400">
-              이 아이디어가 해결하려는 실제 문제, 기존 프로세스의 비효율 또는 타겟 고객의 불만점을 기술하세요.
-            </p>
-            <textarea
-              rows={3}
-              value={editRationale}
-              onChange={(e) => setEditRationale(e.target.value)}
-              placeholder="예: 기존 스터디 40% 이상이 노쇼로 중도 해체되는 반복 문제 해결을 위해..."
-              className="w-full bg-slate-950 border border-amber-900/50 rounded-lg p-2.5 sm:p-3 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 resize-none"
-            />
-          </div>
-
-          {/* [아이디어 보드] 질문 2: 왜 채택·선택했나? */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5" />
-              <span>2. 왜 그 아이디어로 결정/채택했는가? (최종 결정 사유 &amp; 선정 근거)</span>
-            </label>
-            <p className="text-[11px] text-slate-400">
-              다른 대안 대비 채택된 이유, 팀원 피드백, 실현 가능성(FE/BE 공수), 비즈니스 우선순위를 기록하세요.
-            </p>
-            <textarea
-              rows={3}
-              value={editDecisionReason}
-              onChange={(e) => setEditDecisionReason(e.target.value)}
-              placeholder="예: 팀원 만장일치 5표 획득 및 MVP 4주 내 구축 가능성 검증 완료..."
-              className="w-full bg-slate-950 border border-emerald-900/50 rounded-lg p-2.5 sm:p-3 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 resize-none"
-            />
-          </div>
-
-          {/* [아이디어 보드] 상태와 결정자 */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div>
-              <label className="text-xs font-semibold text-slate-300">결정 상태 (Status)</label>
-              <select
-                value={editDecisionStatus}
-                onChange={(e) => setEditDecisionStatus(e.target.value as DecisionStatus)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none mt-1"
-              >
-                <option value="ACCEPTED">채택됨 (Accepted)</option>
-                <option value="REVIEW">검토중 (Review)</option>
-                <option value="DEFERRED">보류 (Deferred)</option>
-                <option value="REJECTED">기각됨 (Rejected)</option>
+        <form onSubmit={handleApply} noValidate className="flex min-h-0 flex-col">
+          <fieldset disabled={disabled} className="min-h-0 space-y-3 overflow-y-auto p-4 sm:p-5">
+            {!currentCard && <p role="alert" className="text-xs text-rose-300">아이디어가 삭제되었습니다. 입력 내용을 복사한 뒤 닫아 주세요.</p>}
+            {isLocked && <p role="alert" className="text-xs text-amber-300">현재 아이디어를 수정할 수 없습니다.</p>}
+            <div className="space-y-1">
+              <label htmlFor="idea-title" className="text-xs font-semibold">제목 (필수)</label>
+              <input ref={titleRef} id="idea-title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                aria-invalid={!!errors.title} aria-describedby="idea-title-error" className={inputClass} />
+              <p id="idea-title-error" className="text-[11px] text-rose-300">{errors.title}</p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="idea-description" className="text-xs font-semibold">설명</label>
+              <textarea id="idea-description" rows={2} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                aria-invalid={!!errors.description} aria-describedby="idea-description-error" className={inputClass} />
+              <p id="idea-description-error" className="text-[11px] text-rose-300">{errors.description}</p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="idea-category" className="text-xs font-semibold">분류</label>
+              <select id="idea-category" disabled={!!currentCard?.parentIdeaId} value={currentCard?.parentIdeaId ? currentCard.category : draft.category}
+                onChange={(e) => setDraft({ ...draft, category: e.target.value as IdeaCategory })} className={inputClass}>
+                {(Object.keys(CATEGORY_META) as IdeaCategory[]).map((category) => <option key={category} value={category}>{CATEGORY_META[category].label}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-400">{currentCard?.parentIdeaId ? '파생 아이디어의 분류는 부모 아이디어에서 변경합니다.' : '분류를 변경하면 하위 아이디어도 함께 이동합니다.'}</p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="idea-rationale" className="text-xs font-semibold text-amber-400">제안 배경</label>
+              <textarea id="idea-rationale" rows={2} value={draft.rationale} onChange={(e) => setDraft({ ...draft, rationale: e.target.value })}
+                aria-invalid={!!errors.rationale} aria-describedby="idea-rationale-error" className={inputClass} />
+              <p id="idea-rationale-error" className="text-[11px] text-rose-300">{errors.rationale}</p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="idea-status" className="text-xs font-semibold">결정 상태</label>
+              <select id="idea-status" value={draft.decisionStatus} onChange={(e) => setDraft({ ...draft, decisionStatus: e.target.value as DecisionStatus })} className={inputClass}>
+                {(Object.keys(STATUS_META) as DecisionStatus[]).map((status) => <option key={status} value={status}>{STATUS_META[status].label}</option>)}
               </select>
             </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-300">의사결정자 (Decided By)</label>
-              {/* [아이디어 보드] 결정 상태나 사유를 바꾸면 서버가 로그인한 본인을 결정자로 기록한다(계약 v2). */}
-              <p className="mt-1 px-2.5 py-1.5 text-xs text-slate-400">결정을 바꾸면 로그인한 본인으로 기록됩니다</p>
+            <div className="space-y-1">
+              <label htmlFor="idea-reason" className="text-xs font-semibold text-emerald-400">결정 사유{reasonRequired ? ' (필수)' : ''}</label>
+              <textarea ref={reasonRef} id="idea-reason" rows={2} value={draft.decisionReason} onChange={(e) => setDraft({ ...draft, decisionReason: e.target.value })}
+                aria-required={reasonRequired} aria-invalid={!!errors.decisionReason} aria-describedby="idea-reason-error" className={inputClass} />
+              <p id="idea-reason-error" className="text-[11px] text-rose-300">{errors.decisionReason}</p>
+              <p className="text-[11px] text-slate-400">결정 상태나 사유를 바꾸면 로그인한 본인으로 기록됩니다.</p>
             </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={reasonMissing}
-              title={reasonMissing ? '채택·보류에는 결정 사유가 필요합니다' : undefined}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white flex items-center gap-1.5 shadow"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>사유 &amp; 의사결정 저장</span>
-            </button>
+          </fieldset>
+          <div className="shrink-0 space-y-2 border-t border-slate-800 p-4">
+            <p className="text-[11px] text-slate-400">적용 후 자동 저장됩니다. 상단의 저장 완료 표시를 확인하세요.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">취소</button>
+              <button type="submit" disabled={disabled || invalid} className="flex items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-40"><Check className="h-3.5 w-3.5" />적용</button>
+            </div>
           </div>
         </form>
       </div>
