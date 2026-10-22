@@ -22,3 +22,13 @@ test('a message I send does not make the next poll skip a teammate message sent 
   assert.deepEqual(state.messages.map((m) => m.id), ['initial', 'teammate', 'mine']);
   assert.equal(state.cursor, '2026-10-21T01:00:02.000Z');
 });
+
+test('COL07: cursor includes ID at equal timestamps and sends cannot advance it', () => {
+  let state = applyPolled({ messages: [] }, [message('a','2026-01-01'),message('b','2026-01-01')]);
+  assert.equal(state.cursorId,'b');
+  state=applySent(state,message('z','2026-01-02'));
+  assert.equal(state.cursorId,'b');
+  state=applyPolled(state,[message('c','2026-01-01')]);
+  assert.equal(state.cursorId,'c');
+  assert.deepEqual(state.messages.map(m=>m.id),['a','b','c','z']);
+});

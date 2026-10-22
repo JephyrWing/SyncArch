@@ -15,6 +15,7 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
   const [loaded, setLoaded] = useState(false);
   const stateRef = useRef<ChatState>({ messages: [] });
   const generationRef = useRef(0);
+  const pendingRef = useRef<{ body: string; id: string } | null>(null);
 
   const commit = (next: ChatState) => {
     stateRef.current = next;
@@ -25,6 +26,7 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
     commit({ messages: [] });
     setLoaded(false);
     setError('');
+    pendingRef.current = null;
     const generation = ++generationRef.current;
     if (!projectId) return;
     let alive = true;
@@ -33,11 +35,13 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
       if (!alive || reading || access.isStopped() || document.hidden) return;
       reading = true;
       try {
-        const incoming = await fetchMessages(projectId, stateRef.current.cursor);
-        if (alive && !access.isStopped()) {
+        for (let page = 0; page < 5; page++) {
+          const incoming = await fetchMessages(projectId, stateRef.current.cursor, stateRef.current.cursorId);
+          if (!alive || access.isStopped()) return;
           commit(applyPolled(stateRef.current, incoming));
           setLoaded(true);
           setError('');
+          if (incoming.length < 200) break;
         }
       } catch (err) {
         if (alive) {
@@ -66,8 +70,24 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
     access.check();
     const generation = generationRef.current;
     try {
-      const sent = await sendMessage(projectId, body);
-      if (generation === generationRef.current && !access.isStopped()) commit(applySent(stateRef.current, sent));
+      // 불명확한 이전 요청을 먼저 같은 ID/본문으로 확인한다. 새 초안은 그 뒤 새 ID를 쓴다.
+      const previous = pendingRef.current;
+      const pending = previous ?? { body, id: crypto.randomUUID() };
+      pendingRef.current = pending;
+      const sent = await sendMessage(projectId, pending.body, pending.id);
+      if (generation !== generationRef.current || access.isStopped()) return;
+      pendingRef.current = null;
+      commit(applySent(stateRef.current, sent));
+      if (pending.body !== body) {
+        access.check();
+        const next = { body, id: crypto.randomUUID() };
+        pendingRef.current = next;
+        const result = await sendMessage(projectId, next.body, next.id);
+        if (generation === generationRef.current && !access.isStopped()) {
+          pendingRef.current = null;
+          commit(applySent(stateRef.current, result));
+        }
+      }
     } catch (err) {
       if (generation === generationRef.current && isAccessError(err)) access.stop(err);
       throw err;

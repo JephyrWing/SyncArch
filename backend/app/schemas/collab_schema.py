@@ -3,7 +3,7 @@ from datetime import datetime
 
 from werkzeug.exceptions import BadRequest
 
-from .project_schema import object_fields, text
+from .project_schema import object_fields, text, identifier
 
 
 def code_input(value):
@@ -28,7 +28,14 @@ def tab_input(value):
 
 
 def message_input(value):
-    return text(object_fields(value, ["body"])["body"], 1000)
+    data = object_fields(value, ["body"], ["messageId"])
+    return text(data["body"], 1000), identifier(data['messageId']) if 'messageId' in data else None
+
+
+def after_input(value, since):
+    if value is None: return None
+    if since is None: raise BadRequest('afterId에는 since 시각이 필요합니다.')
+    return identifier(value)
 
 
 def since_input(value):

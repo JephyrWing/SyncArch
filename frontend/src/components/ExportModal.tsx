@@ -45,12 +45,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'sql' | 'markdown'>('sql');
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const [snapshot, setSnapshot] = useState<{ project: ProjectData; version: number; generatedAt: string } | null>(null);
   const [loadError, setLoadError] = useState('');
   useEffect(() => {
     let alive = true;
     setSnapshot(null);
     setLoadError('');
+    setCopyError('');
+    setCopied(false);
     if (isOpen && exportAllowed) {
       fetchDocument(projectId).then((view) => {
         if (alive && view) setSnapshot({ project: toProjectData(view, 1), version: view.version, generatedAt: new Date().toISOString() });
@@ -85,9 +88,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const handleCopy = () => {
     if (!ready) return;
     navigator.clipboard.writeText(currentContent).then(() => {
+      setCopyError('');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    }).catch(() => setLoadError('클립보드에 복사하지 못했습니다. 파일 다운로드를 사용하세요.'));
+    }).catch(() => setCopyError('클립보드에 복사하지 못했습니다. 파일 다운로드를 사용하세요.'));
   };
 
   const handleDownload = () => {
@@ -237,6 +241,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* [명세서 생성] 코드 보기 영역 */}
         <div className="flex-1 overflow-auto p-4 bg-slate-950 font-mono text-xs text-slate-200">
+          {copyError && <p role="alert">{copyError}</p>}
           {error ? <p role="alert">{error}</p> : !snapshot ? <p role="status">저장본을 불러오는 중…</p> : <p className="mb-3 text-slate-400">저장 버전 {snapshot.version} · 생성 시각 {snapshot.generatedAt}</p>}
           <pre className="whitespace-pre-wrap leading-relaxed select-text font-mono">
             {currentContent}

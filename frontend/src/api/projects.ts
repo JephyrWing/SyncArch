@@ -114,11 +114,11 @@ export const joinProject = async (code: string): Promise<ProjectSummary> =>
   (await request<ProjectSummary>('POST', '/api/projects/join', { code })).data!;
 
 /** [채팅] since가 있으면 그 시각 이후(같은 시각 포함) 메시지만 받는다. */
-export const fetchMessages = async (id: string, since?: string): Promise<ChatMessage[]> =>
-  (await request<ChatMessage[]>('GET', `/api/projects/${id}/messages${since ? `?since=${encodeURIComponent(since)}` : ''}`)).data!;
+export const fetchMessages = async (id: string, since = '1970-01-01T00:00:00Z', afterId?: string): Promise<ChatMessage[]> =>
+  (await request<ChatMessage[]>('GET', `/api/projects/${id}/messages?since=${encodeURIComponent(since)}${afterId ? `&afterId=${encodeURIComponent(afterId)}` : ''}`)).data!;
 
-export const sendMessage = async (id: string, body: string): Promise<ChatMessage> =>
-  (await request<ChatMessage>('POST', `/api/projects/${id}/messages`, { body })).data!;
+export const sendMessage = async (id: string, body: string, messageId?: string): Promise<ChatMessage> =>
+  (await request<ChatMessage>('POST', `/api/projects/${id}/messages`, { body, ...(messageId ? { messageId } : {}) })).data!;
 
 // [협업 상태] 같은 계정으로 탭을 여러 개 열어도 한 탭을 닫을 때 다른 탭의 접속 표시가 지워지지 않도록 탭마다 구분한다.
 const TAB_ID = crypto.randomUUID();
