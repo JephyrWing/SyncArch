@@ -12,6 +12,7 @@ interface ProjectLobbyProps {
   onOpen: (id: string) => void;
   onCreate: (title: string, summary: string) => Promise<void>;
   onJoin: (code: string) => Promise<void>;
+  onArchive: (id: string, archived: boolean) => Promise<void>;
   onLogout: () => void;
 }
 
@@ -19,14 +20,16 @@ const card = 'rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3';
 const input = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none';
 
 /** [프로젝트] 로그인 직후 화면. 프로젝트를 만들면 팀장이 되고, 팀원은 팀장이 준 초대 코드로 참가한다. */
-export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen, onCreate, onJoin, onLogout, access }) => {
+export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen, onCreate, onJoin, onArchive, onLogout, access }) => {
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState<'create' | 'join' | null>(null);
+  const [busy, setBusy] = useState<'create' | 'join' | 'archive' | null>(null);
   const [error, setError] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const visibleProjects = projects.filter((project) => Boolean(project.archivedAt) === showArchived);
 
-  const run = async (kind: 'create' | 'join', action: () => Promise<void>) => {
+  const run = async (kind: 'create' | 'join' | 'archive', action: () => Promise<void>) => {
     setBusy(kind);
     setError('');
     try {
@@ -123,13 +126,18 @@ export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen
         <section className={card}>
           <h2 className="flex items-center gap-1.5 text-sm font-bold text-white">
             <FolderOpen className="h-4 w-4 text-sky-400" />
-            내 프로젝트 ({projects.length})
+            내 프로젝트 ({visibleProjects.length})
           </h2>
-          {projects.length === 0 ? (
-            <p className="text-xs text-slate-500">아직 참여한 프로젝트가 없습니다.</p>
+          {/* [프로젝트] 보관본도 열어서 읽을 수 있으며 복원은 OWNER만 수행한다. */}
+          <div className="flex gap-2 text-xs">
+            <button type="button" aria-pressed={!showArchived} onClick={() => setShowArchived(false)} className="rounded border border-slate-700 px-2 py-1">사용 중 프로젝트</button>
+            <button type="button" aria-pressed={showArchived} onClick={() => setShowArchived(true)} className="rounded border border-slate-700 px-2 py-1">보관된 프로젝트</button>
+          </div>
+          {visibleProjects.length === 0 ? (
+            <p className="text-xs text-slate-500">{showArchived ? '보관된 프로젝트가 없습니다.' : '아직 참여한 프로젝트가 없습니다.'}</p>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
-              {projects.map((project) => (
+              {visibleProjects.map((project) => (
                 <li key={project.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                   <button
                     onClick={() => onOpen(project.id)}
@@ -147,6 +155,15 @@ export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen
                     </div>
                     {project.summary && <p className="mt-1 truncate text-[11px] text-slate-400">{project.summary}</p>}
                   </button>
+                  {project.role === 'OWNER' && <button type="button" disabled={busy !== null}
+                    aria-label={project.archivedAt ? '프로젝트 복원' : '프로젝트 보관'}
+                    onClick={() => {
+                      if (window.confirm(`'${project.title}' 프로젝트를 ${project.archivedAt ? '복원' : '보관'}할까요?`)) {
+                        run('archive', () => onArchive(project.id, !project.archivedAt));
+                      }
+                    }} className="mt-2 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 disabled:opacity-40">
+                    {project.archivedAt ? '복원' : '보관'}
+                  </button>}
                   <LobbyProjectDashboard projectId={project.id} parentAccess={access} />
                 </li>
               ))}

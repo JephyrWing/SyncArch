@@ -16,6 +16,15 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+class SmokeFailure(AssertionError):
+    """Only locally constructed diagnostics, never response bodies or credentials."""
+
+
+def require(condition, message):
+    if not condition:
+        raise SmokeFailure(message)
+
+
 def smoke(origin, sha, login_id, password, timeout=600):
     parsed = urlsplit(origin)
     assert parsed.scheme in ('http', 'https') and parsed.netloc and not parsed.path
@@ -34,16 +43,16 @@ def smoke(origin, sha, login_id, password, timeout=600):
         except HTTPError as error:
             response = error
         with response:
-            assert response.status == expected, f'{method} {path}: HTTP {response.status}, expected {expected}'
+            require(response.status == expected, f'{method} {path}: HTTP {response.status}, expected {expected}')
             raw = response.read()
             return json.loads(raw) if raw else None, response.headers
 
     deadline = time.monotonic() + timeout
     while True:
         try:
-            assert request('GET', '/release.json')[0]['revision'] == sha
-            assert request('GET', '/api/release')[0]['data']['revision'] == sha
-            assert request('GET', '/api/health')[0]['data'] == {'status': 'ok', 'database': 'ok'}
+            require(request('GET', '/release.json')[0]['revision'] == sha, 'Frontend revision mismatch')
+            require(request('GET', '/api/release')[0]['data']['revision'] == sha, 'Backend revision mismatch')
+            require(request('GET', '/api/health')[0]['data'] == {'status': 'ok', 'database': 'ok'}, 'Database health failed')
             break
         except (AssertionError, HTTPError, URLError, TimeoutError, ValueError, KeyError):
             if time.monotonic() >= deadline:
@@ -65,8 +74,9 @@ def smoke(origin, sha, login_id, password, timeout=600):
                 'project': project, 'payload': deepcopy(view['payload'])}
         saved, _ = request('PUT', path, body)
         read, headers = request('GET', path)
-        assert read['data']['version'] == saved['data']['version'] == view['version'] + 1
-        assert read['data']['project']['summary'] == project['summary']
+        require(read['data']['version'] == saved['data']['version'] == view['version'] + 1,
+                'Saved document version did not advance or persist')
+        require(read['data']['project']['summary'] == project['summary'], 'Saved document content did not persist')
         request('GET', path, headers={'If-None-Match': headers['ETag']}, expected=304)
     finally:
         try:
@@ -84,6 +94,8 @@ if __name__ == '__main__':
         origin = os.environ['DEPLOY_URL']
         assert urlsplit(origin).scheme == 'https', 'Public smoke requires HTTPS'
         smoke(origin, os.environ['GITHUB_SHA'], os.environ['SMOKE_LOGIN_ID'], os.environ['SMOKE_PASSWORD'])
+    except SmokeFailure as error:
+        raise SystemExit('Public release smoke failed: ' + str(error)) from None
     except Exception as error:
         # Responses may contain OAuth/session credentials. Never print bodies or exception details.
         raise SystemExit('Public release smoke failed (' + type(error).__name__ + '); use the recovery runbook.') from None

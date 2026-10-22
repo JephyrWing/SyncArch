@@ -28,6 +28,7 @@ import {
   listProjects,
   logout,
   saveDocument,
+  setProjectArchived,
 } from './api/projects.ts';
 import { ApiError } from './api/client.ts';
 import { toTeamMembers } from './adapters/projectAdapter.ts';
@@ -120,7 +121,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
   const canLeave = SAFE_TO_LEAVE.includes(doc.status);
 
   const refreshProjects = async (selectId?: string) => {
-    const list = await listProjects();
+    const list = await listProjects(true);
     setProjectList(list);
     setIsListLoaded(true);
     // [프로젝트] await 뒤에 다시 확인한다. 요청 중에 생긴 편집을 두고 다른 프로젝트로 넘어가지 않는다.
@@ -324,6 +325,11 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
     await refreshProjects(joined.id);
     pushToast(`'${joined.title}'에 참가했습니다`, ['같은 화면을 팀원과 실시간으로 함께 편집합니다.']);
   };
+  // [프로젝트] 로비에서 OWNER가 보관·복원한 뒤 서버 목록을 다시 반영한다.
+  const handleLobbyArchive = async (id: string, archived: boolean) => {
+    await setProjectArchived(id, archived);
+    await refreshProjects();
+  };
   const handleBackToLobby = () => {
     if (!guardLeave()) return;
     setCurrentProjectId(null);
@@ -335,7 +341,8 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
       <SaveStatusBadge status={doc.status} version={doc.version} />
       {currentProjectId && <ProjectDashboard key={currentProjectId} projectId={currentProjectId} access={access} documentVersion={doc.version} />}
       <AccountSettings canNavigate={() => doc.isSafeToLeave()} />
-      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} access={access} />}
+      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} access={access}
+        disabled={doc.status === 'readonly' || Boolean(projectList.find((p) => p.id === currentProjectId)?.archivedAt)} />}
       <button
         onClick={handleBackToLobby}
         className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:text-white"
@@ -367,6 +374,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
           onOpen={setCurrentProjectId}
           onCreate={handleLobbyCreate}
           onJoin={handleLobbyJoin}
+          onArchive={handleLobbyArchive}
           onLogout={handleLogout}
         />
         {toastStack}
