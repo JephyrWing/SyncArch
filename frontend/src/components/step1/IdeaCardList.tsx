@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
 import { Award, ChevronDown, ChevronUp, Edit3, HelpCircle as QuestionIcon, ThumbsUp, Trash2 } from 'lucide-react';
-import type { DecisionStatus, IdeaCard, IdeaCategory, TeamMember } from '../../types/index.ts';
+import type { DecisionStatus, IdeaCard, TeamMember } from '../../types/index.ts';
 import { CATEGORY_META, STATUS_META } from './ideaConfig.ts';
 import { voteCount } from '../../utils/votes.ts';
 
 interface IdeaCardListProps {
   cards: IdeaCard[];
+  expanded: ReadonlySet<string>;
+  onToggle: (id: string) => void;
+  onAddDerived: (card: IdeaCard) => void;
   teamMembers: TeamMember[];
   isLocked: boolean;
   onOpenEdit: (card: IdeaCard) => void;
   onDeleteCard: (id: string) => void;
 }
 
-export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, teamMembers, isLocked, onOpenEdit, onDeleteCard }) => {
-  const [filterCategory] = useState<IdeaCategory | 'all'>('all');
+export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, expanded, onToggle, onAddDerived, teamMembers, isLocked, onOpenEdit, onDeleteCard }) => {
   const [filterStatus, setFilterStatus] = useState<DecisionStatus | 'all'>('all');
   const [expandedRationaleCardId, setExpandedRationaleCardId] = useState<string | null>(null);
 
   const filteredCards = cards.filter((c) => {
-    if (filterCategory !== 'all' && c.category !== filterCategory) return false;
     if (filterStatus !== 'all' && (c.decisionStatus || 'REVIEW') !== filterStatus) return false;
     return true;
   });
@@ -26,7 +27,7 @@ export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, teamMembers, 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="px-3 py-2 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 shrink-0">
-        <span className="font-semibold text-slate-300">등록된 아이디어 ({filteredCards.length})</span>
+        <span className="font-semibold text-slate-300">표시 중인 아이디어 ({filteredCards.length})</span>
         <div className="flex items-center gap-1">
           <select
             value={filterStatus}
@@ -96,6 +97,10 @@ export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, teamMembers, 
 
                 <h4 className="text-xs font-bold text-slate-100">{card.title}</h4>
                 <p className="text-[11px] text-slate-400 leading-relaxed">{card.description}</p>
+                <div className="flex gap-3 text-xs text-indigo-300">
+                  <button type="button" aria-expanded={expanded.has(card.id)} onClick={() => onToggle(card.id)}>{expanded.has(card.id) ? '하위 접기' : '하위 펼치기'}</button>
+                  <button type="button" disabled={isLocked} onClick={() => onAddDerived(card)}>+ 파생 아이디어</button>
+                </div>
 
                 {/* [아이디어 보드] 이유 / 결정 사유 펼치기 */}
                 {(card.rationale || card.decisionReason) && (

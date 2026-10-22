@@ -37,6 +37,7 @@ import { clearReferences, findReferences, renameColumn, renameTable } from './ut
 import { isValidConnection } from './utils/architecture.ts';
 import { voteCount } from './utils/votes.ts';
 import { updateIdea } from './utils/ideas.ts';
+import { ideaPlacement, removeIdeaSubtree } from './utils/ideaTree.ts';
 import { featureCode } from './utils/features.ts';
 import type {
   StepNumber,
@@ -439,8 +440,14 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
 
   // [아이디어 보드] Step 1 처리. 서버는 로그인한 본인만 작성자·투표자·댓글 작성자로 받는다(계약 v2).
   const handleAddCard = (card: Omit<IdeaCard, 'id' | 'votes' | 'votedBy' | 'comments'>) => {
+    const placement = ideaPlacement(currentProject.ideas, card.parentIdeaId ?? null, card.category);
+    if (!placement || doc.status === 'readonly') {
+      pushToast('아이디어를 추가할 수 없습니다', ['최신 부모 아이디어와 편집 권한을 확인하세요. 입력 내용은 유지됩니다.']);
+      return false;
+    }
     const newCard: IdeaCard = {
       ...card,
+      ...placement,
       id: crypto.randomUUID(),
       author: me.displayName,
       authorId: me.id,
@@ -450,7 +457,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
       comments: [],
       ...(card.decidedBy ? { decidedBy: me.id } : {}),
     };
-    updateCurrentProject({ ideas: [newCard, ...currentProject.ideas] });
+    updateCurrentProject({ ideas: [...currentProject.ideas, newCard] });
+    return true;
   };
 
   const handleUpdateCard = (id: string, updated: Partial<IdeaCard>) => {
@@ -468,9 +476,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   };
 
   const handleDeleteCard = (id: string) => {
-    updateCurrentProject({
-      ideas: currentProject.ideas.filter((c) => c.id !== id),
-    });
+    updateCurrentProject(removeIdeaSubtree(currentProject.ideas, currentProject.features, id));
   };
 
   const handleVoteCard = (cardId: string) => {
@@ -775,6 +781,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
       <main className="flex-1 flex overflow-hidden">
         {currentProject.currentStep === 1 && (
           <Step1IdeaBoard
+            key={currentProject.id}
+            features={currentProject.features}
             projectSummary={currentProject.summary}
             onUpdateSummary={(summary) => updateCurrentProject({ summary })}
             cards={currentProject.ideas}
