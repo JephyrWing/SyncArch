@@ -11,7 +11,7 @@ from test_projects_browser import api
 from test_documents_browser import save_request
 from app.extensions import db
 from app.models import ProjectMessage
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 
@@ -123,3 +123,22 @@ def test_offline_draft_rebase_and_hidden_poll_resume_preserve_remote_fields(brow
         assert reads
     finally:
         first.set_offline(False);first.close();second.close()
+
+
+def test_two_account_normal_commit_to_ui_latency(browser_session):
+    """QUAL01: retain same-host document timestamp -> second product UI delay separately from retries."""
+    browser,origin=browser_session;first,second=browser.new_context(),browser.new_context()
+    try:
+        owner,pid=workspace(first,origin,title='W11 propagation measurement')
+        setup=open_page(first,origin);sign_in(setup)
+        assert api(setup,'POST',f'/api/projects/{pid}/members',{'loginId':'auth-b'})['status']==200
+        editor,_=workspace(second,origin,title='W11 propagation measurement',login_id='auth-b',project_id=pid)
+        with owner.expect_response(lambda r:r.url.endswith('/document') and r.request.method=='PUT' and r.status==200) as result:
+            owner.get_by_placeholder(SUMMARY).fill('W11 normal propagated value')
+        saved=result.value.json()['data'];stamp=datetime.fromisoformat(saved['updatedAt'].replace('Z','+00:00'))
+        editor.bring_to_front()
+        expect(editor.get_by_placeholder(SUMMARY)).to_have_value('W11 normal propagated value',timeout=10000)
+        elapsed=(datetime.now(timezone.utc)-stamp).total_seconds()*1000
+        assert elapsed>=0
+        (Path(__file__).resolve().parents[2]/'.local/w11-propagation.json').write_text(json.dumps({'documentVersion':saved['version'],'documentUpdatedAtToRemoteUiMs':elapsed,'condition':'localhost Flask/MariaDB/Redis; two independent Chrome contexts; document timestamp immediately before DB commit; normal 1s poll, no injected fault'}),encoding='utf-8')
+    finally:first.close();second.close()
