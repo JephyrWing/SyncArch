@@ -10,7 +10,8 @@ interface DecisionCanvasProps {
   onVoteCard: (cardId: string, memberName: string) => void;
   onUpdateCard: (id: string, updated: Partial<IdeaCard>) => void;
   onAddComment: (cardId: string, author: string, text: string) => void;
-  onOpenEdit: (card: IdeaCard) => void;
+  onOpenEdit: (card: IdeaCard, decisionStatus?: DecisionStatus) => void;
+  isLocked: boolean;
 }
 
 export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
@@ -20,13 +21,14 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
   onUpdateCard,
   onAddComment,
   onOpenEdit,
+  isLocked,
 }) => {
   const [activeCommentCardId, setActiveCommentCardId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commentAuthor] = useState(teamMembers[1]?.name || '수민');
 
   const handlePostComment = (cardId: string) => {
-    if (!commentText.trim()) return;
+    if (isLocked || !commentText.trim()) return;
     onAddComment(cardId, commentAuthor, commentText.trim());
     setCommentText('');
   };
@@ -92,6 +94,7 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
 
                           {/* [아이디어 보드] 투표 버튼 */}
                           <button
+                            disabled={isLocked}
                             onClick={() => {
                               const voter = teamMembers[0]?.name || '현우';
                               onVoteCard(card.id, voter);
@@ -132,7 +135,8 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
                             {(['ACCEPTED', 'REVIEW', 'DEFERRED'] as DecisionStatus[]).map((st) => (
                               <button
                                 key={st}
-                                onClick={() => onUpdateCard(card.id, { decisionStatus: st })}
+                                disabled={isLocked}
+                                onClick={() => st === 'REVIEW' ? onUpdateCard(card.id, { decisionStatus: st }) : onOpenEdit(card, st)}
                                 className={`px-1.5 py-0.2 rounded ${
                                   (card.decisionStatus || 'REVIEW') === st
                                     ? 'bg-indigo-600 text-white font-bold'
@@ -145,11 +149,12 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
                           </div>
 
                           <button
+                            disabled={isLocked}
                             onClick={() => onOpenEdit(card)}
                             className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold"
                           >
                             <Edit3 className="w-3 h-3" />
-                            <span>사유 수정</span>
+                            <span>수정</span>
                           </button>
                         </div>
 
@@ -186,6 +191,7 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
 
                             <div className="flex gap-1">
                               <input
+                                disabled={isLocked}
                                 type="text"
                                 value={commentText}
                                 onChange={(e) => setCommentText(e.target.value)}
@@ -194,6 +200,7 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
                                 className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-[11px] text-white focus:outline-none"
                               />
                               <button
+                                disabled={isLocked}
                                 onClick={() => handlePostComment(card.id)}
                                 className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-semibold shrink-0"
                               >

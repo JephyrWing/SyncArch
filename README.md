@@ -470,3 +470,9 @@ W05도 같은 runner에서 결과 경로를 `.local/w05-sqlite.xml` 또는 `.loc
 `test_documents_browser.py`는 실제 Chrome 두 context에서 API 저장·409·재시도·새로고침·제외를 확인합니다.
 이는 W06 편집 UI를 검증한 결과가 아닙니다. MariaDB 재시작 검사는 W05로 저장한 네 영역·위치·
 메타데이터·버전·댓글 작성자/시각·최초 멱등 응답·활동 이력을 DB와 Flask 재시작 뒤 비교합니다.
+
+W07A의 `test_ideas_browser.py`는 실제 React 화면에서 로그인·아이디어 수정·채택/보류 사유·취소·
+두 계정의 서로 다른 필드 편집·새로고침·모바일 모달을 검사합니다. 실행 전 `frontend`에서
+`npm ci`, `npm run build`를 실행하고 위 인증 클라이언트 번들을 준비합니다. 공통 runner에 포함되며,
+SQLite 결과와 실제 MariaDB 결과는 구분합니다. 분류 변경은 하위 트리를 함께 저장하고,
+모달의 적용은 자동 저장을 예약하므로 화면 상단의 `저장됨` 표시로 서버 반영을 확인합니다.

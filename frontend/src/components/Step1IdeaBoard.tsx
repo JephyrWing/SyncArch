@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LayoutGrid, LayoutList } from 'lucide-react';
-import type { IdeaCard, TeamMember } from '../types/index.ts';
+import type { DecisionStatus, IdeaCard, TeamMember } from '../types/index.ts';
 import { IdeaSidebarHeader } from './step1/IdeaSidebarHeader.tsx';
 import { NewIdeaForm } from './step1/NewIdeaForm.tsx';
 import { IdeaCardList } from './step1/IdeaCardList.tsx';
@@ -45,7 +45,8 @@ export const Step1IdeaBoard: React.FC<Step1IdeaBoardProps> = ({
   isDesktop = true,
 }) => {
   // [아이디어 보드] 근거·결정 수정 모달
-  const [editingCard, setEditingCard] = useState<IdeaCard | null>(null);
+  const [editingCard, setEditingCard] = useState<{ card: IdeaCard; decisionStatus?: DecisionStatus } | null>(null);
+  const openEdit = (card: IdeaCard, decisionStatus?: DecisionStatus) => setEditingCard({ card, decisionStatus });
 
   const acceptedCount = cards.filter(c => c.decisionStatus === 'ACCEPTED').length;
   const reviewCount = cards.filter(c => (c.decisionStatus || 'REVIEW') === 'REVIEW').length;
@@ -102,7 +103,7 @@ export const Step1IdeaBoard: React.FC<Step1IdeaBoardProps> = ({
           <NewIdeaForm teamMembers={teamMembers} isLocked={isLocked} onAddCard={onAddCard} />
 
           {/* [아이디어 보드] 필터 바와 카드 목록 */}
-          <IdeaCardList cards={cards} teamMembers={teamMembers} isLocked={isLocked} onOpenEdit={setEditingCard} onDeleteCard={onDeleteCard} />
+          <IdeaCardList cards={cards} teamMembers={teamMembers} isLocked={isLocked} onOpenEdit={openEdit} onDeleteCard={onDeleteCard} />
         </div>
 
         {/* [아이디어 보드] 왼쪽·오른쪽 패널 크기 조절 구분선 */}
@@ -127,7 +128,8 @@ export const Step1IdeaBoard: React.FC<Step1IdeaBoardProps> = ({
             onVoteCard={onVoteCard}
             onUpdateCard={onUpdateCard}
             onAddComment={onAddComment}
-            onOpenEdit={setEditingCard}
+            onOpenEdit={openEdit}
+            isLocked={isLocked}
           />
         </div>
       </div>
@@ -135,9 +137,10 @@ export const Step1IdeaBoard: React.FC<Step1IdeaBoardProps> = ({
       {/* [아이디어 보드] 이유·결정 수정 전용 모달 */}
       {editingCard && (
         <EditDecisionModal
-          key={editingCard.id}
-          card={editingCard}
-          teamMembers={teamMembers}
+          key={editingCard.card.id}
+          card={editingCard.card}
+          currentCard={cards.find((card) => card.id === editingCard.card.id)}
+          initialDecisionStatus={editingCard.decisionStatus}
           isLocked={isLocked}
           onUpdateCard={onUpdateCard}
           onClose={() => setEditingCard(null)}

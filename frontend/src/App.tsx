@@ -34,6 +34,7 @@ import { usePresence } from './hooks/usePresence.ts';
 import { clearReferences, findReferences, renameColumn, renameTable } from './utils/erdRename.ts';
 import { isValidConnection } from './utils/architecture.ts';
 import { voteCount } from './utils/votes.ts';
+import { updateIdea } from './utils/ideas.ts';
 import { featureCode } from './utils/features.ts';
 import type {
   StepNumber,
@@ -444,7 +445,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
       ('decisionReason' in updated && updated.decisionReason !== card.decisionReason));
     const fields = decisionChanged ? { ...rest, decidedBy: me.id } : rest;
     updateCurrentProject({
-      ideas: currentProject.ideas.map((c) => (c.id === id ? { ...c, ...fields } : c)),
+      ideas: updateIdea(currentProject.ideas, id, fields),
     });
   };
 
@@ -763,7 +764,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
             onVoteCard={handleVoteCard}
             onAddComment={handleAddComment}
             teamMembers={teamMembers}
-            isLocked={currentProject.stepLocks[1]}
+            isLocked={currentProject.stepLocks[1] || doc.status === 'readonly'}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
             onResetResize={handleResetSidebarWidth}

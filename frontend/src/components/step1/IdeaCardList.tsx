@@ -78,7 +78,7 @@ export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, teamMembers, 
                         <button
                           onClick={() => onOpenEdit(card)}
                           className="text-slate-500 hover:text-indigo-400 p-0.5"
-                          title="발의 배경 / 결정 사유 수정"
+                          title="아이디어 수정"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
