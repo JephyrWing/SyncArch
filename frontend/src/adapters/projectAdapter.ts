@@ -20,8 +20,17 @@ export const toProjectData = (view: DocumentView, currentStep: StepNumber): Proj
   currentStep,
   stepLocks: view.payload.stepLocks ?? DEFAULT_LOCKS,
   ideas: view.payload.ideas,
-  features: view.payload.features,
-  nodes: view.payload.nodes,
+  // 서버가 허용하는 최소 문서에도 화면이 필요한 표시 기본값을 제공한다.
+  features: view.payload.features.map((feature) => ({
+    ...feature,
+    domain: feature.domain ?? '', priority: feature.priority ?? 'P1', assignee: feature.assignee ?? '',
+    method: feature.method ?? 'GET', endpoint: feature.endpoint ?? '',
+    requestFields: feature.requestFields ?? '', responseFields: feature.responseFields ?? '',
+    summary: feature.summary ?? '', status: feature.status ?? 'PLANNED',
+  })),
+  nodes: view.payload.nodes.map((node) => ({
+    ...node, techStack: node.techStack ?? [], description: node.description ?? '',
+  })),
   connections: view.payload.connections,
   // [ERD 설계] 서버에서 생략 가능한 표시 필드를 채워 API로 만든 최소 문서도 편집할 수 있게 한다.
   tables: view.payload.tables.map((table) => ({

@@ -2,6 +2,8 @@
 import time
 from pathlib import Path
 import json
+import re
+import pytest
 from playwright.sync_api import expect
 
 from test_auth import auth_app
@@ -13,6 +15,54 @@ from app.extensions import db
 from app.models import ProjectMessage
 from datetime import datetime, timezone
 from uuid import uuid4
+
+
+@pytest.mark.parametrize('area,step,item', [
+    ('features', 'Step 2. 기능·API 명세', {'name':'W11 minimum feature'}),
+    ('nodes', 'Step 3. 시스템 아키텍처', {'name':'W11 minimum node','category':'Service','x':0,'y':0}),
+])
+def test_server_valid_minimal_document_renders_and_edits(browser_session,area,step,item):
+    browser,origin=browser_session;context=browser.new_context()
+    try:
+        page,pid=workspace(context,origin,title='W11 minimum '+area)
+        setup=open_page(context,origin);sign_in(setup)
+        path=f'/api/projects/{pid}/document';body=save_request(api(setup,'GET',path)['data'])
+        identifier=str(uuid4());body['payload'][area]=[dict(id=identifier,**item)]
+        assert api(setup,'PUT',path,body)['status']==200
+        page.reload();page.get_by_role('button',name=step,exact=True).click()
+        expect(page.get_by_text(item['name'],exact=True).first).to_be_visible()
+        page.get_by_placeholder(SUMMARY).fill('minimum document remains editable')
+        expect(page.get_by_role('status').filter(has_text='저장됨')).to_be_visible(timeout=15000)
+        saved=api(setup,'GET',path)['data']
+        assert saved['project']['summary']=='minimum document remains editable'
+        assert saved['payload'][area][0]['id']==identifier
+        page.reload();page.get_by_role('button',name=step,exact=True).click()
+        expect(page.get_by_text(item['name'],exact=True).first).to_be_visible()
+    finally:context.close()
+
+
+def test_follow_target_departure_does_not_automatically_resume_on_return(browser_session):
+    browser,origin=browser_session;first,second=browser.new_context(),browser.new_context()
+    try:
+        owner,pid=workspace(first,origin,title='W11 follow departure')
+        setup=open_page(first,origin);sign_in(setup)
+        assert api(setup,'POST',f'/api/projects/{pid}/members',{'loginId':'auth-b'})['status']==200
+        editor,_=workspace(second,origin,title='W11 follow departure',login_id='auth-b',project_id=pid)
+        target=owner.get_by_title(re.compile('검증 B.*이 사람 화면 따라가기'))
+        expect(target).to_be_enabled(timeout=10000);target.click()
+        expect(owner.get_by_text('검증 B 따라가는 중',exact=True)).to_be_visible()
+        editor.get_by_role('button',name='Step 2. 기능·API 명세',exact=True).click()
+        expect(owner.get_by_title(re.compile('검증 B.*Step 2.*따라가기 끄기'))).to_be_visible(timeout=10000)
+        before=api(setup,'GET',f'/api/projects/{pid}/document')['data']
+        editor.get_by_title('프로젝트 목록(생성·참가)으로').click()
+        expect(owner.get_by_text('검증 B 따라가는 중',exact=True)).to_have_count(0,timeout=10000)
+        owner.get_by_role('button',name='Step 3. 시스템 아키텍처',exact=True).click()
+        editor.get_by_role('button',name='W11 follow departure',exact=False).click()
+        editor.get_by_role('button',name='Step 1. 아이디어 보드',exact=True).click()
+        expect(owner.get_by_title(re.compile('검증 B.*Step 1.*이 사람 화면 따라가기'))).to_be_visible(timeout=10000)
+        expect(owner.get_by_text('현재 아키텍처',exact=True)).to_be_visible()
+        assert api(setup,'GET',f'/api/projects/{pid}/document')['data']['version']==before['version']
+    finally:first.close();second.close()
 
 
 def test_commit_response_loss_retry_same_key_single_activity_and_remote_visibility(browser_session):

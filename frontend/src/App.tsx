@@ -163,6 +163,10 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
   });
   // [협업 상태] 처음 목록을 받기 전이거나 멤버에서 빠진 사람은 따라가지 않는다.
   const followed = people.find((member) => member.id === followId && member.isOnline) ?? null;
+  // 이탈을 확인한 대상은 해제한다. 재접속만으로 사용자의 따라보기 선택을 되살리지 않는다.
+  useEffect(() => {
+    if (followId && !followed) setFollowId(null);
+  }, [followId, Boolean(followed)]);
   useEffect(() => {
     if (followed) setCurrentStep(followed.currentStep);
   }, [followed?.currentStep]);
