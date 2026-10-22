@@ -23,7 +23,16 @@ export const toProjectData = (view: DocumentView, currentStep: StepNumber): Proj
   features: view.payload.features,
   nodes: view.payload.nodes,
   connections: view.payload.connections,
-  tables: view.payload.tables,
+  // [ERD 설계] 서버에서 생략 가능한 표시 필드를 채워 API로 만든 최소 문서도 편집할 수 있게 한다.
+  tables: view.payload.tables.map((table) => ({
+    ...table,
+    comment: table.comment ?? '', relatedFeatureIds: table.relatedFeatureIds ?? [], x: table.x ?? 100, y: table.y ?? 100,
+    columns: table.columns.map((column) => ({
+      ...column,
+      isPrimaryKey: column.isPrimaryKey ?? false, isForeignKey: column.isForeignKey ?? false,
+      isUnique: column.isUnique ?? false, isNullable: column.isNullable ?? true, comment: column.comment ?? '',
+    })),
+  })),
   archVersions: view.payload.archVersions ?? [],
   currentArchVersionId: view.payload.currentArchVersionId,
   updatedAt: view.updatedAt,

@@ -1,4 +1,5 @@
 import type { ErdTable, ExportSettings, SqlDialect } from '../types/index.ts';
+import { columnTypeExpression, normalizeTypeExpression } from './mariadbTypes.ts';
 
 /**
  * [SQL 생성] FK 참조를 기준으로 테이블을 위상 정렬한다.
@@ -68,17 +69,17 @@ export function sortTablesTopologically(tables: ErdTable[]): ErdTable[] {
  * [SQL 생성] 표준 데이터 타입을 DBMS별 타입으로 바꾼다
  */
 function mapDataType(type: string, dialect: SqlDialect): string {
-  const upper = type.toUpperCase().trim();
+  const upper = normalizeTypeExpression(type);
   
   if (dialect === 'postgres') {
     return upper;
   }
   
   if (dialect === 'mysql' || dialect === 'mariadb') {
-    if (upper === 'UUID') return dialect === 'mariadb' ? 'UUID' : 'VARCHAR(36)';
+    if (upper === 'UUID') return dialect === 'mariadb' ? 'CHAR(36)' : 'VARCHAR(36)';
     if (upper === 'TIMESTAMPTZ') return 'DATETIME(6)';
     if (upper === 'BOOLEAN') return 'TINYINT(1)';
-    if (upper === 'TEXT') return 'LONGTEXT';
+    if (upper === 'TEXT') return dialect === 'mariadb' ? 'TEXT' : 'LONGTEXT';
     if (upper === 'JSONB') return 'JSON';
     return upper;
   }
@@ -195,7 +196,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 
     table.columns.forEach(col => {
       const colName = settings.dialect === 'oracle' ? col.name.toUpperCase() : col.name;
-      let mappedType = mapDataType(col.dataType, settings.dialect);
+      let mappedType = mapDataType(columnTypeExpression(col), settings.dialect);
       let def = `    ${colName.padEnd(16)} ${mappedType}`;
 
       if (col.isPrimaryKey) {

@@ -34,7 +34,8 @@ import { toTeamMembers } from './adapters/projectAdapter.ts';
 import { SAFE_TO_LEAVE, useProjectDocument, type RemoteChange } from './hooks/useProjectDocument.ts';
 import { usePresence } from './hooks/usePresence.ts';
 import { isAccessError, useProjectAccess } from './hooks/useProjectAccess.ts';
-import { clearReferences, findReferences, renameColumn, renameTable } from './utils/erdRename.ts';
+import { clearReferences, findReferences, renameColumn, renameTable, unlinkFeature } from './utils/erdRename.ts';
+import { deleteIdeaBranch, ideaBranchIds } from './utils/ideaDeletion.ts';
 import { isValidConnection } from './utils/architecture.ts';
 import { voteCount } from './utils/votes.ts';
 import { featureCode } from './utils/features.ts';
@@ -471,9 +472,11 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   };
 
   const handleDeleteCard = (id: string) => {
-    updateCurrentProject({
-      ideas: currentProject.ideas.filter((c) => c.id !== id),
-    });
+    const ids = ideaBranchIds(currentProject.ideas, id);
+    const cards = currentProject.ideas.filter((card) => ids.has(card.id));
+    const features = currentProject.features.filter((feature) => feature.relatedStoryId && ids.has(feature.relatedStoryId));
+    if (!ids.size || !window.confirm(`삭제할 아이디어: ${cards.map((card) => card.title).join(', ')}\n출처 연결이 해제되는 기능: ${features.map(featureCode).join(', ') || '없음'}\n휴지통이 없어 되돌릴 수 없습니다. 삭제할까요?`)) return;
+    updateCurrentProject(deleteIdeaBranch(currentProject, id));
   };
 
   const handleVoteCard = (cardId: string) => {
@@ -527,8 +530,12 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   };
 
   const handleDeleteFeature = (id: string) => {
+    const affected = currentProject.tables.filter((table) => table.relatedFeatureIds.includes(id)
+      || table.columns.some((column) => column.relatedFeatureId === id));
+    if (affected.length && !window.confirm(`기능 삭제로 다음 테이블의 기능 연결이 해제됩니다: ${affected.map((table) => table.name).join(', ')}. 삭제할까요?`)) return;
     updateCurrentProject({
       features: currentProject.features.filter((f) => f.id !== id),
+      tables: unlinkFeature(currentProject.tables, id),
     });
   };
 
@@ -587,6 +594,8 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   };
 
   const handleDeleteNode = (id: string) => {
+    const related = currentProject.connections.filter((connection) => connection.sourceId === id || connection.targetId === id);
+    if (related.length && !window.confirm(`노드 삭제로 연결선 ${related.length}개(${related.map((connection) => connection.label || connection.id).join(', ')})가 제거됩니다. 휴지통이 없어 되돌릴 수 없습니다. 삭제할까요?`)) return;
     updateCurrentProject({
       nodes: currentProject.nodes.filter((n) => n.id !== id),
       connections: currentProject.connections.filter((c) => c.sourceId !== id && c.targetId !== id),
@@ -667,7 +676,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
     if (!table) return;
     const refs = findReferences(currentProject.tables, table.name).filter((r) => r.tableId !== id);
     if (
-      refs.length > 0 &&
       !window.confirm(
         `'${table.name}'을(를) 참조하는 FK ${refs.length}개(${describeRefs(refs)})의 FK 표시와 참조가 해제됩니다. 컬럼은 남습니다.\n휴지통이 없어 되돌릴 수 없습니다. 삭제할까요?`
       )
@@ -691,7 +699,7 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
 
   const handleUpdateColumn = (tableId: string, colId: string, updated: Partial<ErdColumn>) => {
     const { name, ...rest } = updated;
-    // [ERD 설계] 컬럼 이름을 바꾸면 입력할 때마다 FK 참조도 함께 바뀐다.
+    // [ERD 설계] 확인한 컬럼 이름과 모든 FK 참조를 같은 문서 변경에 담는다.
     const tables = name === undefined ? currentProject.tables : renameColumn(currentProject.tables, tableId, colId, name);
     updateCurrentProject({
       tables: tables.map((t) => {
@@ -710,9 +718,8 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
     if (!table || !column) return;
     const refs = findReferences(currentProject.tables, table.name, column.name);
     if (
-      refs.length > 0 &&
       !window.confirm(
-        `'${table.name}.${column.name}'을(를) 참조하는 FK ${refs.length}개(${describeRefs(refs)})의 FK 표시와 참조가 해제됩니다. 삭제할까요?`
+        `'${table.name}.${column.name}'을(를) 참조하는 FK ${refs.length}개(${describeRefs(refs)})의 FK 표시와 참조가 해제됩니다. 휴지통이 없어 되돌릴 수 없습니다. 삭제할까요?`
       )
     ) {
       return;

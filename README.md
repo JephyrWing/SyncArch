@@ -432,6 +432,39 @@ MariaDB DDL은 암묵 커밋되므로 중간 실패 시 백업 복구 또는 실
 
 ## 검증
 
+### ERD MariaDB 자료형 입력
+
+Step 4에서 대상 DBMS가 MariaDB이면 데이터 타입 입력란을 클릭해 전체 추천 목록을 볼 수 있습니다.
+타입 이름·별칭·한국어 분류로 검색하고 마우스 또는 방향키와 Enter로 선택합니다.
+문자·바이너리·BIT는 길이/비트 수, DECIMAL은 전체·소수 자릿수, 날짜/시간은 소수초 자릿수 입력칸이 나타납니다.
+숫자 입력칸에서 Enter를 누르거나 입력칸 그룹 밖으로 이동하면 적용합니다. DECIMAL의 두 입력칸 사이 이동은 저장하지 않으므로 두 값을 함께 수정할 수 있습니다.
+잘못된 범위·빈 값은 저장하지 않으며 Escape로 취소합니다. `VARCHAR(100)`, `DECIMAL(12,2)`, `TIMESTAMP(6)`처럼 괄호로 직접 입력해도 됩니다.
+입력은 Enter 또는 포커스 이동 시 적용하며 Escape는 취소합니다. 잘못된 타입은 입력란에 오류를 표시하고 저장에 보내지 않습니다.
+타입 변경 시 이전 타입의 길이·정밀도를 제거하며 서버가 분리해 저장한 값을 화면·SQL에서 다시 조합합니다.
+
+MariaDB 11.4의 숫자(UNSIGNED 포함)·문자·바이너리·날짜/시간·JSON·UUID·IP·공간 타입과 ENUM/SET을 지원합니다.
+ENUM/SET은 `ENUM('Active','inactive')`처럼 작은따옴표로 입력하며 값의 대소문자를 보존합니다.
+값에 작은따옴표가 있으면 `''`로 표기합니다. 백슬래시 이스케이프는 SQL 모드에 따라 해석이 달라 지원하지 않습니다.
+자료형 표기는 4,000자 이하이며 VARCHAR 길이는 기존 utf8mb4 계약에 따라 1~16,383으로 제한합니다.
+정수 표시 폭·ZEROFILL·SQL_MODE 전용 타입/별칭 등 모든 MariaDB 문법을 제공하는 것은 아닙니다.
+UUID는 기존 문서 계약대로 MariaDB SQL에서 CHAR(36)으로 내보냅니다. 기존 컬럼은 DBMS 선택만으로 변환하지 않습니다.
+다른 DBMS는 기존 직접 입력·미리보기를 유지하며 전용 자동완성은 후속 범위입니다.
+FK 체크 후 참조 컬럼을 `users.id` 형식으로 입력하면 저장 전에 양쪽의 타입·길이·정밀도·UNSIGNED를 비교합니다.
+타입이 다르거나 참조 대상이 없거나 PK/UNIQUE가 아니면 입력란 아래에 이유를 표시하고 연결을 저장하지 않습니다.
+호환되는 연결만 Enter 또는 입력란 밖으로 이동할 때 FK 표시와 참조를 한 번에 적용합니다.
+Escape는 연결 편집을 취소하며, FK 체크를 해제하면 참조도 함께 제거합니다.
+이미 연결된 양쪽 컬럼의 타입·길이를 변경해 관계가 깨지는 경우도 저장 전에 차단합니다.
+오류 메시지에 표시된 두 컬럼의 타입을 확인하고, 타입을 바꿔야 한다면 연결을 해제한 뒤 양쪽을 맞추고 다시 연결하세요.
+참고: [MariaDB 자료형](https://mariadb.com/docs/server/reference/data-types),
+[DECIMAL 범위](https://mariadb.com/docs/server/reference/data-types/numeric-data-types/decimal).
+
+관련 검증은 `frontend`의 `npm test`와 `npm run lint`, `npm run build`,
+`backend`의 `python -m pytest tests/test_document_schema.py tests/test_mariadb_types.py`로 실행합니다.
+실제 제품의 로그인 → 자료형·숫자 속성 입력 → 자동 저장 → 새로고침 복원은
+`backend/tests/test_erd_workspace_browser.py`가 검사합니다. 프런트 빌드와 인증 클라이언트 번들,
+Python Playwright·Chrome을 준비한 뒤 위 공통 runner로 실행합니다.
+DB/Flask 재시작 보존은 `backend/scripts/verify_mariadb.py`의 격리 인스턴스 검증에 포함됩니다.
+
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -519,3 +552,19 @@ Vite 검사는 별도 임시 포트에서 `/api` 프록시의 로그인/쿠키·
 
 실제 React·Flask·MariaDB/Redis 검사는 `backend/tests/test_dashboard_browser.py`에 있습니다.
 프런트 빌드와 인증 클라이언트 번들을 준비한 뒤 공통 runner에 `PYTEST_ADDOPTS='-k dashboard_browser'`를 지정하면 선택 실행할 수 있습니다.
+
+
+### W09 ERD 이름 변경과 기능 연결
+
+컬럼명은 입력 후 영향받는 FK 목록을 확인하고 **컬럼명 적용**을 눌러 반영합니다.
+취소 또는 Escape는 원래 이름과 참조를 유지합니다. 테이블명 변경도 모든 FK 참조를
+같은 문서 저장에 담으며, 참조하는 컬럼의 업무상 이름은 유지합니다.
+컬럼의 **고유 값**, **기본값**과 테이블의 **연관 기능**을 편집할 수 있습니다.
+연결된 기능을 삭제하면 영향 테이블을 확인한 뒤 테이블·컬럼의 기능 연결을 함께 해제합니다.
+
+`backend/tests/test_erd_workspace_browser.py`는 실제 React·Flask·Redis·Chrome으로
+이름 중복/취소, 다중 FK 일괄 저장, 실제 두 계정의 409 재기준화, 422 저장 거부,
+새로고침 복원, 기능 연결·삭제와 아이디어 하위 항목·아키텍처 요소 삭제를 검사합니다.
+컬럼 속성·자료형 매개변수와 PK 전환도 검사하며, 테이블당 PK 컬럼 하나라는 서버 계약을 화면에서도 확인합니다.
+위 공통 runner에 포함되며 SQLite에서는 테스트별 파일 DB를 사용해 HTTP 스레드의 연결을 분리합니다.
+MariaDB 검증은 지정한 격리 테스트 DB를 사용합니다. 다른 DB 버전의 결과는 11.4 검증과 구분해 기록합니다.
