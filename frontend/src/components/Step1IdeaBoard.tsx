@@ -102,7 +102,7 @@ export const Step1IdeaBoard: React.FC<Step1IdeaBoardProps> = ({
           <NewIdeaForm teamMembers={teamMembers} isLocked={isLocked} onAddCard={onAddCard} />
 
           {/* [아이디어 보드] 필터 바와 카드 목록 */}
-          <IdeaCardList cards={cards} isLocked={isLocked} onOpenEdit={setEditingCard} onDeleteCard={onDeleteCard} />
+          <IdeaCardList cards={cards} teamMembers={teamMembers} isLocked={isLocked} onOpenEdit={setEditingCard} onDeleteCard={onDeleteCard} />
         </div>
 
         {/* [아이디어 보드] 왼쪽·오른쪽 패널 크기 조절 구분선 */}

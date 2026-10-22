@@ -6,6 +6,7 @@ import { AddFeatureForm } from './step2/AddFeatureForm.tsx';
 import { FeatureList } from './step2/FeatureList.tsx';
 import { FeatureDetail } from './step2/FeatureDetail.tsx';
 import { ApiDocModal } from './step2/ApiDocModal.tsx';
+import { voteCount } from '../utils/votes.ts';
 
 interface Step2FeatureSpecProps {
   features: FeatureSpec[];
@@ -50,7 +51,7 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
   const [filterStatus, setFilterStatus] = useState<FeatureProgressStatus | 'ALL'>('ALL');
   const [filterAssignee, setFilterAssignee] = useState<string>('ALL');
 
-  const highVoteCardsCount = ideas.filter((i) => i.votes >= 4).length;
+  const highVoteCardsCount = ideas.filter((i) => voteCount(i) >= 4).length;
 
   // [기능 명세] 전체 진행률 계산
   const totalCount = features.length;

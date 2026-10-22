@@ -220,7 +220,7 @@ export interface DocumentView {
   version: number;
   payload: DocumentPayload;
   updatedAt: string;
-  updatedBy: { id: string; displayName: string };
+  updatedBy?: { id: string; displayName: string };
 }
 
 // [채팅] GET/POST /api/projects/{id}/messages 항목

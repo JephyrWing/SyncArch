@@ -117,7 +117,9 @@ export const useProjectDocument = (
     if (view.version <= notifiedVersionRef.current) return;
     notifiedVersionRef.current = view.version;
     const changes = baseRef.current ? diffPayload(toPayload(baseRef.current), view.payload) : [];
-    optionsRef.current.onRemoteChange({ actorId: view.updatedBy.id, text: describeChanges(view.updatedBy.displayName, changes, view.version), changes, version: view.version });
+    // shortcut: 문서 응답에 저장한 사람이 없어서 '팀원'으로 표시한다. 이름이 필요하면 /activity의 actorName을 쓴다.
+    const actor = view.updatedBy ?? { id: '', displayName: '팀원' };
+    optionsRef.current.onRemoteChange({ actorId: actor.id, text: describeChanges(actor.displayName, changes, view.version), changes, version: view.version });
   };
 
   // [협업 상태] 내 저장이 버전 충돌로 거절됐다. 최신본을 받아 합친 뒤 다시 저장한다.
@@ -168,7 +170,17 @@ export const useProjectDocument = (
       versionRef.current = result.version;
       notifiedVersionRef.current = Math.max(notifiedVersionRef.current, result.version);
       setVersion(result.version);
-      baseRef.current = pending.snapshot;
+      // [문서 저장] 서버는 댓글 시각·작성자·기본값을 채운 정규화본을 돌려준다. 다음 저장이 그 값을 바꾸지 않도록 받아 쓰고,
+      // 요청 중에 생긴 내 편집은 그 위에 합친다.
+      const saved = result.payload && result.project
+        ? toProjectData({ project: result.project, payload: result.payload, version: result.version, updatedAt: result.updatedAt }, 1)
+        : pending.snapshot;
+      baseRef.current = saved;
+      if (saved !== pending.snapshot && projectRef.current) {
+        const merged = mergeProject(pending.snapshot, projectRef.current, saved);
+        projectRef.current = merged;
+        setProject(merged);
+      }
       savedRevisionRef.current = pending.revision;
       // [문서 저장] 요청이 진행 중일 때 생긴 편집은 다음 요청으로 보낸다.
       if (revisionRef.current !== pending.revision) {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Award, Edit3, HelpCircle as QuestionIcon, MessageSquare, ThumbsUp } from 'lucide-react';
 import type { DecisionStatus, IdeaCard, IdeaCategory, TeamMember } from '../../types/index.ts';
 import { CATEGORY_META, STATUS_META } from './ideaConfig.ts';
+import { voteCount } from '../../utils/votes.ts';
 
 interface DecisionCanvasProps {
   cards: IdeaCard[];
@@ -99,7 +100,7 @@ export const DecisionCanvas: React.FC<DecisionCanvasProps> = ({
                             title="팀원 +1 투표"
                           >
                             <ThumbsUp className="w-3 h-3 text-amber-400" />
-                            <span>+{card.votes}</span>
+                            <span>+{voteCount(card)}</span>
                           </button>
                         </div>
 

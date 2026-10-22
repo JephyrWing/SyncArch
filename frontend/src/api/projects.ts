@@ -23,6 +23,9 @@ export interface SaveDocumentResult {
   updatedAt: string;
   mutationId: string;
   replayed: boolean;
+  // [문서 저장] 서버가 정규화한 저장본. 재전송 응답(replayed)에는 없을 수 있다.
+  project?: ProjectSummary;
+  payload?: DocumentPayload;
 }
 
 /** [로그인] 리프레시 쿠키가 있으면 액세스 토큰을 새로 받아 로그인 상태를 복구한다. */

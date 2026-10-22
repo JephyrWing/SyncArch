@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Award, ChevronDown, ChevronUp, Edit3, HelpCircle as QuestionIcon, ThumbsUp, Trash2 } from 'lucide-react';
-import type { DecisionStatus, IdeaCard, IdeaCategory } from '../../types/index.ts';
+import type { DecisionStatus, IdeaCard, IdeaCategory, TeamMember } from '../../types/index.ts';
 import { CATEGORY_META, STATUS_META } from './ideaConfig.ts';
+import { voteCount } from '../../utils/votes.ts';
 
 interface IdeaCardListProps {
   cards: IdeaCard[];
+  teamMembers: TeamMember[];
   isLocked: boolean;
   onOpenEdit: (card: IdeaCard) => void;
   onDeleteCard: (id: string) => void;
 }
 
-export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, isLocked, onOpenEdit, onDeleteCard }) => {
+export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, teamMembers, isLocked, onOpenEdit, onDeleteCard }) => {
   const [filterCategory] = useState<IdeaCategory | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<DecisionStatus | 'all'>('all');
   const [expandedRationaleCardId, setExpandedRationaleCardId] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, isLocked, onO
 
                   <div className="flex items-center gap-1.5">
                     <span className="text-[11px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 flex items-center gap-1">
-                      <ThumbsUp className="w-3 h-3" /> {card.votes}
+                      <ThumbsUp className="w-3 h-3" /> {voteCount(card)}
                     </span>
 
                     {!isLocked && (
@@ -126,7 +128,7 @@ export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, isLocked, onO
                         )}
                         {card.decidedBy && (
                           <div className="text-[10px] text-slate-500 pl-4">
-                            의사결정자: {card.decidedBy}
+                            의사결정자: {teamMembers.find((m) => m.id === card.decidedBy)?.name ?? card.decidedBy}
                           </div>
                         )}
                       </div>

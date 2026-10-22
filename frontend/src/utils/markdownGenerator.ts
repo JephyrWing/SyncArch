@@ -1,4 +1,5 @@
 import type { IdeaCard, FeatureSpec, ArchNode, ArchConnection, ErdTable } from '../types/index.ts';
+import { voteCount } from './votes.ts';
 
 export function generateMarkdownSpec(
   title: string,
@@ -33,7 +34,7 @@ export function generateMarkdownSpec(
 
   cards.forEach(card => {
     const cat = categoryLabels[card.category] || card.category;
-    lines.push(`| ${cat} | **${card.title}** | ${card.description} | ${card.author} | ⭐ ${card.votes}표 |`);
+    lines.push(`| ${cat} | **${card.title}** | ${card.description} | ${card.author} | ⭐ ${voteCount(card)}표 |`);
   });
   lines.push('');
 

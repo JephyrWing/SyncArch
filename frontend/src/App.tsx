@@ -33,6 +33,7 @@ import { SAFE_TO_LEAVE, useProjectDocument, type RemoteChange } from './hooks/us
 import { usePresence } from './hooks/usePresence.ts';
 import { clearReferences, findReferences, renameColumn, renameTable } from './utils/erdRename.ts';
 import { isValidConnection } from './utils/architecture.ts';
+import { voteCount } from './utils/votes.ts';
 import type {
   StepNumber,
   TeamMember,
@@ -411,21 +412,27 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
     }
   };
 
-  // [아이디어 보드] Step 1 처리
+  // [아이디어 보드] Step 1 처리. 서버는 로그인한 본인만 작성자·투표자·댓글 작성자로 받는다(계약 v2).
   const handleAddCard = (card: Omit<IdeaCard, 'id' | 'votes' | 'votedBy' | 'comments'>) => {
     const newCard: IdeaCard = {
       ...card,
       id: crypto.randomUUID(),
-      votes: 1,
-      votedBy: [card.author],
+      author: me.displayName,
+      authorId: me.id,
+      votes: 0,
+      votedBy: [],
+      voterIds: [me.id],
       comments: [],
+      ...(card.decidedBy ? { decidedBy: me.id } : {}),
     };
     updateCurrentProject({ ideas: [newCard, ...currentProject.ideas] });
   };
 
   const handleUpdateCard = (id: string, updated: Partial<IdeaCard>) => {
+    // [아이디어 보드] 결정을 바꾼 사람은 서버가 로그인 사용자 ID로 기록한다. 화면이 고른 이름은 쓰지 않는다.
+    const fields = updated.decidedBy ? { ...updated, decidedBy: me.id } : updated;
     updateCurrentProject({
-      ideas: currentProject.ideas.map((c) => (c.id === id ? { ...c, ...updated } : c)),
+      ideas: currentProject.ideas.map((c) => (c.id === id ? { ...c, ...fields } : c)),
     });
   };
 
@@ -435,25 +442,17 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
     });
   };
 
-  const handleVoteCard = (cardId: string, memberName: string) => {
+  const handleVoteCard = (cardId: string) => {
     updateCurrentProject({
       ideas: currentProject.ideas.map((card) => {
-        if (card.id === cardId) {
-          const already = card.votedBy.includes(memberName);
-          return {
-            ...card,
-            votes: already ? Math.max(0, card.votes - 1) : card.votes + 1,
-            votedBy: already
-              ? card.votedBy.filter((v) => v !== memberName)
-              : [...card.votedBy, memberName],
-          };
-        }
-        return card;
+        if (card.id !== cardId) return card;
+        const voters = card.voterIds ?? [];
+        return { ...card, voterIds: voters.includes(me.id) ? voters.filter((id) => id !== me.id) : [...voters, me.id] };
       }),
     });
   };
 
-  const handleAddComment = (cardId: string, author: string, text: string) => {
+  const handleAddComment = (cardId: string, _author: string, text: string) => {
     updateCurrentProject({
       ideas: currentProject.ideas.map((card) => {
         if (card.id === cardId) {
@@ -463,9 +462,11 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
               ...card.comments,
               {
                 id: crypto.randomUUID(),
-                author,
+                author: me.displayName,
+                authorId: me.id,
                 text,
-                createdAt: '방금 전',
+                // [아이디어 보드] 저장하면 서버 시각으로 바뀐다.
+                createdAt: new Date().toISOString(),
               },
             ],
           };
@@ -498,7 +499,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   };
 
   const handleImportFromStep1 = () => {
-    const highVoteIdeas = currentProject.ideas.filter((i) => i.votes >= 4);
+    const highVoteIdeas = currentProject.ideas.filter((i) => voteCount(i) >= 4);
     const existingStoryIds = new Set(currentProject.features.map((f) => f.relatedStoryId).filter(Boolean));
 
     const newFeatures: FeatureSpec[] = [];
