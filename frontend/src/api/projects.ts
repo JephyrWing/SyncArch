@@ -57,8 +57,12 @@ export const logout = (): Promise<void> => authClient.logout();
 export const saveEmail = async (email: string, password: string): Promise<string> =>
   (await request<{ email: string }>('POST', '/api/auth/email', { email, password })).data!.email;
 
-export const listProjects = async (): Promise<ProjectSummary[]> =>
-  (await request<ProjectSummary[]>('GET', '/api/projects')).data!;
+export const listProjects = async (includeArchived = false): Promise<ProjectSummary[]> =>
+  (await request<ProjectSummary[]>('GET', `/api/projects${includeArchived ? '?archived=all' : ''}`)).data!;
+
+/** [프로젝트] 기존 보관 API를 사용하며 복원해도 초대 코드를 임의로 바꾸지 않는다. */
+export const setProjectArchived = async (id: string, archived: boolean): Promise<ProjectSummary> =>
+  (await request<ProjectSummary>('PATCH', `/api/projects/${id}/archive`, { archived })).data!;
 
 export const createProject = async (title: string, summary: string, categoryTag = ''): Promise<ProjectSummary> =>
   (await request<ProjectSummary>('POST', '/api/projects', { title, summary, categoryTag })).data!;

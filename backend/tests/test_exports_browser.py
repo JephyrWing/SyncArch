@@ -125,7 +125,8 @@ def test_exports_refuse_unsaved_draft_and_failed_read(browser_session):
         page.get_by_role('button',name='내보내기 닫기').click()
         page.unroute(f'**/api/projects/{pid}/document')
         page.once('dialog', lambda d:d.accept())
-        page.reload()
+        # enter() performs the fresh navigation. A second immediate navigation can
+        # abort session hydration while the server is rotating the refresh cookie.
         enter(page,origin)
         page.route(f'**/api/projects/{pid}/document',lambda r:error_response(r,503,'DB_UNAVAILABLE'))
         page.get_by_role('button', name='내보내기 (SQL / MD)', exact=True).click()

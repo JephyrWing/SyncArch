@@ -21,7 +21,7 @@ def _new_code(session):
 def get_invite(session_factory, actor_id, project_id):
     """팀장만 봅니다. 코드가 없던 기존 프로젝트는 이때 만듭니다."""
     with session_factory.begin() as session:
-        project, _ = require_access(session, actor_id, project_id, lock=True, owner=True)
+        project, _ = require_access(session, actor_id, project_id, lock=True, owner=True, write=True)
         if not project.invite_code:
             project.invite_code = _new_code(session)
         return {"code": project.invite_code}
@@ -30,7 +30,7 @@ def get_invite(session_factory, actor_id, project_id):
 def regenerate_invite(session_factory, actor_id, project_id):
     """코드가 새어 나갔을 때 팀장이 바꿉니다. 이미 참가한 멤버는 그대로입니다."""
     with session_factory.begin() as session:
-        project, _ = require_access(session, actor_id, project_id, lock=True, owner=True)
+        project, _ = require_access(session, actor_id, project_id, lock=True, owner=True, write=True)
         project.invite_code = _new_code(session)
         return {"code": project.invite_code}
 

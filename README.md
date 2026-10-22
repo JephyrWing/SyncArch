@@ -10,6 +10,10 @@ JWT 인증·Redis RT 회전과 프로젝트·멤버·문서 원자 저장·활�
 
 ## 구조
 
+GitHub Actions의 네 필수 검사와 Cloudtype 배포 설정은
+[CI/CD 운영 안내](docs/cloudtype-cicd.md)에 있습니다.
+develop/PR에서는 검사만 수행합니다. 네 검사를 통과한 main push에서 Cloudtype의 main 브랜치를 빌드하고, 공개 릴리스 SHA와 저장·조회 동작을 검증합니다.
+
 ```text
 frontend/
   src/                       기존 React 프로토타입
@@ -612,3 +616,11 @@ Markdown은 접힌 아이디어·결정 사유·원본 기능 연결·노드/통
 계속 지원합니다. DB 스키마 변경은 없습니다. 관련 API·동시성 검사는 `test_message_recovery.py`에 있습니다.
 동시에 실행하는 검사가 기존 빌드를 사용 중이면 Vite `--outDir`로 별도 빌드를 만든 뒤
 `TEST_FRONTEND_DIST`에 절대 경로를 지정할 수 있습니다. 이는 pytest의 앱 설정에만 적용됩니다.
+
+### 초대 코드와 보관 프로젝트 확인
+
+로비의 사용 중/보관된 프로젝트 목록에서 OWNER가 프로젝트를 보관·복원합니다.
+보관본은 읽을 수 있지만 초대 코드 버튼은 비활성화되며, 서버도 코드 조회·재발급·신규 가입을
+`403 PROJECT_ARCHIVED`로 거부합니다. 복원은 기존 코드를 자동 회전시키지 않습니다.
+`backend/tests/test_invite_policy.py`는 오류 계약·DB 불변·역할·중복/동시 가입을,
+`test_invite_policy_browser.py`는 독립 세 계정의 실제 React 등록·재발급·참여·보관·복원을 검사합니다.

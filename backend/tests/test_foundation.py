@@ -50,6 +50,14 @@ def test_db_check_command(app):
     assert "Database connection OK" in result.output
 
 
+def test_release_revision_is_public_without_configuration_secrets(app):
+    app.config.update(RELEASE_SHA="a" * 40, SECRET_KEY="private-flask", JWT_SECRET_KEY="private-jwt")
+    response = app.test_client().get("/api/release")
+    assert response.status_code == 200
+    assert response.json == {"data": {"revision": "a" * 40}}
+    assert response.headers["Cache-Control"] == "no-store"
+
+
 def test_db_check_failure_does_not_expose_credentials(app):
     with patch.object(db.session, "execute", side_effect=SQLAlchemyError("secret-password")):
         result = app.test_cli_runner().invoke(args=["db-check"])

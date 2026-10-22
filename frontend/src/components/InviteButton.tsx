@@ -7,7 +7,7 @@ import { isAccessError, type ProjectAccess } from '../hooks/useProjectAccess.ts'
 const pretty = (code: string) => `${code.slice(0, 4)}-${code.slice(4)}`;
 
 /** [초대 코드] 팀장 헤더 버튼. 코드를 보고 복사하고, 새어 나갔으면 재발급한다. */
-export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess }> = ({ projectId, access }) => {
+export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess; disabled?: boolean }> = ({ projectId, access, disabled = false }) => {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
   const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle');
@@ -15,7 +15,7 @@ export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess }
 
   const load = async (action: () => Promise<string>) => {
     // [초대 코드] 요청이 겹치면 늦게 온 옛 코드가 화면에 남을 수 있어 한 번에 하나만 보낸다.
-    if (state === 'loading' || access.isStopped()) return;
+    if (disabled || state === 'loading' || access.isStopped()) return;
     setState('loading');
     try {
       const next = await action();
@@ -43,19 +43,19 @@ export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess }
   return (
     <div className="relative">
       <button
-        disabled={access.isStopped()}
+        disabled={disabled || access.isStopped()}
         onClick={() => {
           setOpen(!open);
           if (!open && !code) load(() => fetchInviteCode(projectId));
         }}
         className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20"
         title="팀원에게 보낼 초대 코드"
-        aria-expanded={open}
+        aria-expanded={open && !disabled}
       >
         <KeyRound className="h-3.5 w-3.5" />
         <span className="hidden md:inline">초대 코드</span>
       </button>
-      {open && (
+      {open && !disabled && (
         <div className="absolute right-0 top-9 z-50 w-72 space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs shadow-2xl">
           <div className="flex items-center justify-between">
             <span className="font-bold text-white">팀원 초대 (팀장 전용)</span>
