@@ -111,7 +111,7 @@ def test_offline_draft_rebase_and_hidden_poll_resume_preserve_remote_fields(brow
         assert saved['payload']['nodes'][0]['name']=='remote preserved node'
         assert saved['project']['summary']=='offline local draft'
         reads=[]
-        owner.on('request',lambda r:reads.append(r.url) if r.request.method=='GET' and r.url.endswith('/document') else None)
+        owner.on('request',lambda r:reads.append(r.url) if r.method=='GET' and r.url.endswith('/document') else None)
         owner.evaluate("Object.defineProperty(document,'hidden',{configurable:true,get:()=>true})")
         owner.wait_for_timeout(1200);reads.clear()
         changed=save_request(saved);changed['project']['summary']='visible after focus'
