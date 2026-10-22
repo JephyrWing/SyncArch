@@ -39,6 +39,16 @@ export function generateMarkdownSpec(
   });
   lines.push('');
 
+  // [명세서 생성] 개인 화면에서 접힌 카드도 부모 관계와 결정 근거를 모두 내보낸다.
+  const ideaCell = (value: string) => value.replace(/\r?\n/g, '<br>').replace(/\|/g, '\\|');
+  lines.push('### 1.1 아이디어 파생 관계와 결정');
+  lines.push('| 아이디어 ID | 부모 ID | 형제 순서 | 결정 상태 | 결정 사유 |');
+  lines.push('| :--- | :--- | :---: | :--- | :--- |');
+  cards.forEach(card => {
+    lines.push(`| ${card.id} | ${card.parentIdeaId ?? '루트'} | ${card.siblingOrder ?? ''} | ${card.decisionStatus ?? 'REVIEW'} | ${ideaCell(card.decisionReason ?? '')} |`);
+  });
+  lines.push('');
+
   // [명세서 생성] Step 2
   lines.push(`---`);
   lines.push(`## 2. 기능 명세 및 API 설계 (Step 2)`);
