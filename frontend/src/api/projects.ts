@@ -76,6 +76,32 @@ export const fetchDocument = async (id: string, knownVersion?: number): Promise<
 export const saveDocument = async (id: string, body: SaveDocumentBody): Promise<SaveDocumentResult> =>
   (await request<SaveDocumentResult>('PUT', `/api/projects/${id}/document`, body)).data!;
 
+export interface ProjectActivity {
+  eventId: string;
+  projectId: string;
+  version: number;
+  actorId: string;
+  actorName: string;
+  committedAt: string;
+  changes: { area: string; action: string; label?: string; entityType?: string; entityId?: string }[];
+}
+
+export interface ProjectDashboardData {
+  projectId: string;
+  version: number;
+  counts: Record<'ideas' | 'features' | 'nodes' | 'connections' | 'tables', number>;
+  featureStatuses: Record<string, number>;
+  progress: number;
+  recentActivity: ProjectActivity[];
+}
+
+/** [협업 상태] 진행도와 최근 활동은 한 서버 저장 버전의 집계로 표시한다. */
+export const fetchDashboard = async (id: string): Promise<ProjectDashboardData> =>
+  (await request<ProjectDashboardData>('GET', `/api/projects/${id}/dashboard`)).data!;
+
+export const fetchActivity = async (id: string, beforeVersion: number): Promise<{ items: ProjectActivity[]; nextBeforeVersion: number | null }> =>
+  (await request<{ items: ProjectActivity[]; nextBeforeVersion: number | null }>('GET', `/api/projects/${id}/activity?beforeVersion=${beforeVersion}&limit=20`)).data!;
+
 /** [초대 코드] 팀장만 받는다. 코드가 없던 기존 프로젝트는 이때 만들어진다. */
 export const fetchInviteCode = async (id: string): Promise<string> =>
   (await request<{ code: string }>('GET', `/api/projects/${id}/invite`)).data!.code;
