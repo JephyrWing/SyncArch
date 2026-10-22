@@ -78,7 +78,7 @@ export default function App() {
   }, []);
 
   if (me === undefined) {
-    return <div className="flex h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">불러오는 중…</div>;
+    return <div className="flex h-dvh items-center justify-center bg-slate-950 text-sm text-slate-400">불러오는 중…</div>;
   }
   if (!me) return <LoginScreen initialError={googleError} onLogin={(user) => { setMe(user); setGoogleError(''); }} />;
   return <Workspace me={me} onLoggedOut={() => { setMe(null); setGoogleLinked(false); setGoogleError(''); }} googleLinked={googleLinked} googleError={googleError} />;
@@ -342,7 +342,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
         title="프로젝트 목록(생성·참가)으로"
       >
         <LayoutGrid className="h-3.5 w-3.5" />
-        <span className="hidden xl:inline">목록</span>
+        <span className="hidden 2xl:inline">목록</span>
       </button>
       <button
         onClick={handleLogout}
@@ -350,7 +350,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
         title="로그아웃"
       >
         <LogOut className="h-3.5 w-3.5" />
-        <span className="hidden xl:inline">{me.displayName}</span>
+        <span className="hidden 2xl:inline">{me.displayName}</span>
       </button>
     </div>
   );
@@ -376,7 +376,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
 
   if (!currentProject) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-slate-950 p-4 text-sm text-slate-300">
+      <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-slate-950 p-4 text-sm text-slate-300">
         {doc.status === 'error' ? (
           <>
             <p className="text-rose-300">{doc.message}</p>
@@ -738,7 +738,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 overflow-hidden select-none">
+    <div className="flex flex-col h-dvh w-screen bg-slate-950 font-sans text-slate-100 overflow-hidden select-none">
       {/* [공통 화면] 프로젝트 전환이 있는 56px 전역 헤더 */}
       <Header
         projects={headerProjects}

@@ -121,23 +121,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
       <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden text-slate-100">
         {/* [명세서 생성] 헤더 */}
-        <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
+        <div className="p-4 border-b border-slate-800 bg-slate-950 flex flex-wrap md:flex-nowrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1 md:flex-none">
+            <div className="w-9 h-9 shrink-0 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
               <Download className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <span>산출물 내보내기 엔진 (Export Engine)</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="hidden md:block text-xs text-slate-400 mt-0.5">
                 선택한 DBMS 맞춤 DDL 스크립트 및 통합 Markdown 아키텍처 명세서
               </p>
             </div>
           </div>
 
           {/* [명세서 생성] 탭 버튼 */}
-          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+          <div className="order-last w-full md:order-none md:w-auto flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveTab('sql')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
@@ -249,7 +249,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         </div>
 
         {/* [명세서 생성] 하단 버튼 */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
+        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-400">
             {activeTab === 'sql' ? (
               <span>

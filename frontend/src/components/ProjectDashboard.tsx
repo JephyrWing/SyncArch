@@ -53,8 +53,8 @@ export function ProjectDashboard({ projectId, access, parentAccess, documentVers
         {data && <div><h3 className="mb-2 text-xs text-slate-400">최근 변경</h3><ActivityList items={data.recentActivity.slice(0, 2)} /></div>}
         {overview.error && <p role="alert" className="text-xs text-rose-300">{overview.error}{overview.blocked ? ' 현황 조회를 중단했습니다.' : ' 마지막으로 확인한 저장본입니다.'}</p>}
       </div>}
-      <button type="button" onClick={() => overview.setHistoryOpen(true)} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white" aria-label="프로젝트 현황·활동 열기">
-        <BarChart3 className="h-3.5 w-3.5" /><span>현황·활동</span>
+      <button type="button" onClick={() => overview.setHistoryOpen(true)} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white" aria-label="프로젝트 현황·활동 열기" title="프로젝트 현황·활동">
+        <BarChart3 className="h-3.5 w-3.5" /><span className="hidden 2xl:inline">현황·활동</span>
       </button>
       {details && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/80 p-3" onKeyDown={event => { if (event.key === 'Escape') overview.setHistoryOpen(false); }}>
         <section role="dialog" aria-modal="true" aria-label="프로젝트 현황·활동" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100 shadow-2xl">

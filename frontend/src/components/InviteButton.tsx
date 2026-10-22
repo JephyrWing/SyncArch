@@ -53,10 +53,10 @@ export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess }
         aria-expanded={open}
       >
         <KeyRound className="h-3.5 w-3.5" />
-        <span className="hidden md:inline">초대 코드</span>
+        <span className="hidden 2xl:inline">초대 코드</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-50 w-72 space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs shadow-2xl">
+        <div className="fixed inset-x-4 top-24 sm:absolute sm:inset-x-auto sm:right-0 sm:top-9 z-50 sm:w-72 space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4 text-xs shadow-2xl">
           <div className="flex items-center justify-between">
             <span className="font-bold text-white">팀원 초대 (팀장 전용)</span>
             <button onClick={() => setOpen(false)} className="text-slate-500 hover:text-white" aria-label="닫기">

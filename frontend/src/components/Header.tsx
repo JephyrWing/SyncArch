@@ -132,15 +132,16 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-800 text-slate-100 px-2 sm:px-4 flex items-center justify-between select-none relative z-50 shrink-0 gap-2 overflow-visible">
+    // [공통 화면] 모바일에서는 2줄: 프로젝트·버튼 줄 아래에 단계 탭이 전체 폭으로 온다.
+    <header className="min-h-14 lg:h-14 py-1.5 lg:py-0 flex-wrap lg:flex-nowrap bg-slate-900 border-b border-slate-800 text-slate-100 px-2 sm:px-4 flex items-center justify-between select-none relative z-50 shrink-0 gap-2 overflow-visible">
       {/* [공통 화면] 왼쪽: 브랜드, 프로젝트 전환, 상태 */}
-      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 lg:flex-none lg:shrink-0">
         {/* [공통 화면] 브랜드 */}
-        <div className="flex items-center gap-1.5 sm:gap-2 font-bold tracking-tight text-indigo-400 shrink-0">
+        <div className="hidden sm:flex items-center gap-1.5 sm:gap-2 font-bold tracking-tight text-indigo-400 shrink-0">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-sm shadow-indigo-500/20">
             <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
-          <span className="hidden lg:inline text-sm sm:text-base bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-200 bg-clip-text text-transparent">
+          <span className="hidden xl:inline text-sm sm:text-base bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-200 bg-clip-text text-transparent">
             SyncArch
           </span>
         </div>
@@ -148,10 +149,10 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="h-4 w-px bg-slate-700/80 mx-0.5 hidden sm:block" />
 
         {/* [프로젝트] 프로젝트 선택 드롭다운 */}
-        <div className="relative">
+        <div className="relative min-w-0">
           <button
             onClick={() => setShowProjectDropdown(!showProjectDropdown)}
-            className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors max-w-[130px] sm:max-w-[180px] lg:max-w-[240px]"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors max-w-full sm:max-w-[180px] lg:max-w-[130px] xl:max-w-[240px]"
             title="프로젝트 목록 조회 및 전환"
           >
             <FolderKanban className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -339,7 +340,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* [공통 화면] 가운데: 4단계 전환 */}
-      <nav className="flex items-center min-w-0 overflow-x-auto bg-slate-950/70 p-0.5 sm:p-1 rounded-xl border border-slate-800/80 shadow-inner">
+      <nav className="order-last w-full lg:order-none lg:w-auto flex items-center min-w-0 overflow-x-auto bg-slate-950/70 p-0.5 sm:p-1 rounded-xl border border-slate-800/80 shadow-inner">
         {steps.map((st) => {
           const isActive = currentStep === st.num;
           const isLocked = stepLocks[st.num];
@@ -348,14 +349,15 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               key={st.num}
               onClick={() => onChangeStep(st.num)}
-              className={`relative px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
+              aria-label={st.fullLabel}
+              title={st.fullLabel}
+              className={`relative flex-1 lg:flex-none justify-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <span className="inline xl:hidden">{st.label}</span>
-              <span className="hidden xl:inline">{st.fullLabel}</span>
+              <span>{st.label}</span>
               {isLocked && <Lock className="w-3 h-3 text-amber-400 ml-0.5 shrink-0" />}
             </button>
           );
@@ -369,7 +371,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* [공통 화면] 단계 잠금 전환 */}
         <button
           disabled
-          className={`p-1.5 rounded-lg border transition-colors opacity-40 cursor-not-allowed ${
+          className={`hidden xl:block p-1.5 rounded-lg border transition-colors opacity-40 cursor-not-allowed ${
             stepLocks[currentStep]
               ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
               : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -425,11 +427,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* [명세서 생성] 내보내기 모달 열기 버튼 */}
         <button
           onClick={onOpenExport}
+          aria-label="내보내기"
           className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
         >
           <Download className="w-3.5 h-3.5" />
-          <span className="hidden xl:inline">내보내기 (SQL / MD)</span>
-          <span className="xl:hidden inline">내보내기</span>
+          <span className="hidden 2xl:inline">내보내기 (SQL / MD)</span>
+          <span className="hidden sm:inline 2xl:hidden">내보내기</span>
         </button>
       </div>
 

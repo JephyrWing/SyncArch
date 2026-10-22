@@ -46,8 +46,8 @@ export const AccountSettings: React.FC<{ canNavigate?: () => boolean }> = ({ can
   return (
     <>
       <GoogleAccountLink canNavigate={canNavigate} />
-      <button type="button" onClick={() => setOpen(true)} aria-label="이메일 등록/수정" className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white">
-        <Mail className="h-3.5 w-3.5" /><span className="hidden sm:inline">이메일</span>
+      <button type="button" onClick={() => setOpen(true)} aria-label="이메일 등록/수정" title="이메일 등록/수정" className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white">
+        <Mail className="h-3.5 w-3.5" /><span className="hidden 2xl:inline">이메일</span>
       </button>
       {open && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4">

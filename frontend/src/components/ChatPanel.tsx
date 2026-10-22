@@ -61,11 +61,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly,
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 left-4 z-[55] flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-2xl hover:bg-indigo-500"
+        className="fixed bottom-14 left-3 sm:left-4 z-40 flex items-center gap-1.5 rounded-full bg-indigo-600 p-3 sm:px-4 sm:py-2.5 text-xs font-bold text-white shadow-2xl hover:bg-indigo-500"
         aria-label={`팀 채팅 열기${unread ? `, 새 메시지 ${unread}개` : ''}`}
       >
         <MessageCircle className="h-4 w-4" />
-        팀 채팅
+        <span className="hidden sm:inline">팀 채팅</span>
         {unread > 0 && <span className="rounded-full bg-rose-500 px-1.5 text-[10px]">{unread}</span>}
       </button>
     );
@@ -74,7 +74,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly,
   return (
     <section
       aria-label="팀 채팅"
-      className="fixed bottom-4 left-4 z-[55] flex h-[min(460px,calc(100vh-6rem))] w-[min(340px,calc(100vw-2rem))] flex-col rounded-2xl border border-slate-700 bg-slate-900/95 text-xs text-slate-100 shadow-2xl"
+      className="fixed bottom-4 left-4 z-40 flex h-[min(460px,calc(100dvh-6rem))] w-[min(340px,calc(100vw-2rem))] flex-col rounded-2xl border border-slate-700 bg-slate-900/95 text-xs text-slate-100 shadow-2xl"
     >
       <header className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
         <span className="flex items-center gap-1.5 font-bold">

@@ -39,7 +39,7 @@ export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen
   };
 
   return (
-    <div className="h-screen w-screen overflow-y-auto bg-slate-950 p-4 font-sans text-slate-100">
+    <div className="h-dvh w-screen overflow-y-auto bg-slate-950 p-4 font-sans text-slate-100">
       <div className="mx-auto max-w-4xl space-y-5 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-indigo-400">

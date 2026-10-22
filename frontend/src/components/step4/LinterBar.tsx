@@ -45,7 +45,7 @@ export const LinterBar: React.FC<LinterBarProps> = ({ linterIssues, isLocked, ta
       )}
     </div>
 
-    <div className="text-[11px] text-slate-500 font-mono shrink-0 pl-2">
+    <div className="hidden sm:block text-[11px] text-slate-500 font-mono shrink-0 pl-2">
       선택 DBMS: <strong className="text-sky-400">{DBMS_NAMES[targetDbms].label}</strong>
     </div>
   </div>

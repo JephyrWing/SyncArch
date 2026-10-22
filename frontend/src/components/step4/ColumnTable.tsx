@@ -20,7 +20,7 @@ export const ColumnTable: React.FC<ColumnTableProps> = ({
   onDeleteColumn,
 }) => (
   <div className="flex-1 overflow-auto">
-    <table className="w-full text-left text-xs border-collapse">
+    <table className="w-full min-w-[640px] text-left text-xs border-collapse">
       <thead className="bg-slate-900/90 text-slate-400 font-medium text-[10px] uppercase tracking-wider sticky top-0 z-10 border-b border-slate-800">
         <tr>
           <th className="p-2 w-7">PK</th>
