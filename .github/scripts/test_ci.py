@@ -40,7 +40,7 @@ class ReleaseGateTests(unittest.TestCase):
         images = {name: 'ghcr.io/jephyrwing/syncarch-' + name + '@sha256:' + 'a'*64
                   for name in ('frontend', 'backend')}
         docs = render(images)
-        self.assertEqual([doc['name'] for doc in docs], ['backend', 'frontend'])
+        self.assertEqual([doc['name'] for doc in docs], ['syncarch-api', 'frontend'])
         backend = docs[0]
         self.assertEqual(backend['resources']['replicas'], 1)
         self.assertTrue(all(set(env) == {'name', 'secret'} for env in backend['options']['env']))

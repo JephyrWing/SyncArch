@@ -1,10 +1,11 @@
 [
   {
-    "name": "backend",
+    "name": "syncarch-api",
     "app": "container",
     "options": {
       "image": "BACKEND_IMAGE",
       "ports": 5000,
+      "start": "",
       "env": [
         {"name": "APP_ENV", "secret": "APP_ENV"},
         {"name": "FLASK_DEBUG", "secret": "FLASK_DEBUG"},
@@ -34,7 +35,8 @@
     "options": {
       "image": "FRONTEND_IMAGE",
       "ports": 8080,
-      "env": [{"name": "API_UPSTREAM", "value": "http://backend:5000"}]
+      "start": "",
+      "env": [{"name": "API_UPSTREAM", "value": "http://syncarch-api:5000"}]
     },
     "resources": {"memory": 0.125, "replicas": 1}
   }

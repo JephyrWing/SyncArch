@@ -7,6 +7,6 @@ COPY frontend/dist/ /usr/share/nginx/html/
 COPY deploy/frontend/default.conf.template /etc/nginx/templates/default.conf.template
 RUN test -f /usr/share/nginx/html/release.json \
     && chown -R 1000:1000 /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx
-ENV API_UPSTREAM=http://backend:5000 NGINX_ENVSUBST_FILTER=API_UPSTREAM
+ENV API_UPSTREAM=http://syncarch-api:5000 NGINX_ENVSUBST_FILTER=API_UPSTREAM
 USER 1000:1000
 EXPOSE 8080

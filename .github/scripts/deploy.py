@@ -33,9 +33,9 @@ def preflight():
 
 def render(images):
     docs = json.loads(Path('.cloudtype/services.json').read_text(encoding='utf-8'))
-    assert {doc['name'] for doc in docs} == {'frontend', 'backend'}
+    assert {doc['name'] for doc in docs} == {'frontend', 'syncarch-api'}
     for doc in docs:
-        image = images[doc['name']]
+        image = images['backend' if doc['name'] == 'syncarch-api' else 'frontend']
         if not re.fullmatch(r'ghcr\.io/[a-z0-9_./-]+@sha256:[0-9a-f]{64}', image):
             raise ValueError('Cloudtype must deploy immutable GHCR image digests')
         doc['options']['image'] = image

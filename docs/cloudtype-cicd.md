@@ -36,11 +36,11 @@ GitHub concurrency는 대기 실행을 최신 대기 실행으로 대체할 수 
 
 | 서비스 | 실행/연결 | 메모리 |
 | --- | --- | --- |
-| frontend | Nginx 8080, React 정적 파일, /api → http://backend:5000 | 128 MiB |
-| backend | Python 3.12.6, Waitress 한 프로세스, 8 threads, 5000 | 256 MiB |
+| frontend | Nginx 8080, React 정적 파일, /api → http://syncarch-api:5000 | 128 MiB |
+| syncarch-api (기존 서비스) | Python 3.12.6, Waitress 한 프로세스, 8 threads, 5000 | 256 MiB |
 | 기존 mariadb | 현재 서비스와 영속 디스크 유지 | 기존 설정 |
 
-.cloudtype/services.json에는 frontend/backend만 있다.
+.cloudtype/services.json에는 frontend/기존 syncarch-api만 있다.
 MariaDB 생성·초기화·seed·drop·버전 변경은 일반 배포에 포함하지 않는다.
 백엔드는 DB 준비 확인 → forward flask db upgrade → Waitress 순서로 시작한다.
 계정 seed는 별도의 명시적 관리 작업이다. 프런트에 DB/Redis/OAuth secret을 전달하지 않는다.
