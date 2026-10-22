@@ -59,6 +59,16 @@ def saved_edit(page, action):
     expect(page.get_by_role("status").filter(has_text="저장됨")).to_be_visible()
 
 
+def delete_node(page, name, accept=True):
+    def confirm(dialog):
+        assert dialog.type == "confirm"
+        assert "연결선" in dialog.message
+        dialog.accept() if accept else dialog.dismiss()
+
+    page.once("dialog", confirm)
+    node_row(page, name).get_by_title("노드 삭제", exact=True).click()
+
+
 def test_architecture_node_edit_drag_cancel_and_reload(browser_session):
     """TC-ARCH-01: actual modal, drag, SQL readback, reload, cancel and empty-name guard."""
     browser, origin = browser_session
@@ -124,7 +134,10 @@ def test_architecture_connection_edit_delete_and_reference_guards(browser_sessio
         bad["payload"]["connections"][0]["targetId"] = str(uuid4())
         assert api(setup, "PUT", f"/api/projects/{pid}/document", bad)["status"] == 422
         assert document(setup, pid)["version"] == stored["version"]
-        saved_edit(page, lambda: node_row(page, "Node A").get_by_title("노드 삭제", exact=True).click())
+        delete_node(page, "Node A", accept=False)
+        expect(node_row(page, "Node A")).to_be_visible()
+        assert document(setup, pid) == stored
+        saved_edit(page, lambda: delete_node(page, "Node A"))
         enter(page, origin)
         expect(node_row(page, "Node A")).to_have_count(0)
         stored = document(setup, pid)["payload"]
@@ -170,7 +183,7 @@ def test_architecture_two_accounts_merge_modal_fields_and_delete_edit(browser_se
         expect(editor.get_by_role("status").filter(has_text="저장 중")).to_be_visible()
         editor.wait_for_timeout(500)
         assert len(held) == 1
-        saved_edit(owner, lambda: node_row(owner, "Owner name").get_by_title("노드 삭제", exact=True).click())
+        saved_edit(owner, lambda: delete_node(owner, "Owner name"))
         held.pop().continue_()
         editor.unroute(f"**/api/projects/{pid}/document")
         expect(editor.get_by_role("status").filter(has_text="저장됨")).to_be_visible(timeout=15000)
