@@ -6,7 +6,7 @@ import secrets
 import subprocess
 from uuid import uuid4
 
-from frontend_artifact import digest
+from frontend_artifact import inventory
 from run_backend import admin
 from smoke import smoke
 
@@ -60,9 +60,14 @@ def main():
             details = json.loads(docker('image', 'inspect', image))[0]
             assert details['Config']['Labels']['org.opencontainers.image.revision'] == sha
             manifest['images'][service] = {'name': image, 'id': details['Id']}
-        archive = Path('.local/release-images.tar')
-        subprocess.run(['docker', 'save', '-o', str(archive), *[v['name'] for v in manifest['images'].values()]], check=True)
-        manifest['archiveSha256'] = digest(archive)
+        # The Git-source Dockerfile rebuild must produce the frontend files CI tested.
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            subprocess.run(['docker', 'cp', containers[1] + ':/usr/share/nginx/html/.', folder], check=True)
+            expected = json.loads(Path('.local/frontend-manifest.json').read_text(encoding='utf-8'))
+            actual = inventory(Path(folder))
+            assert all(actual.get(path) == checksum for path, checksum in expected['files'].items()), 'Source rebuild differs from tested frontend'
+        manifest['delivery'] = 'git-source-rebuild'
         Path('.local/release-manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     finally:
         for container in reversed(containers):

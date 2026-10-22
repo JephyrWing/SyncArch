@@ -209,7 +209,7 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Build exact release containers
+      - name: Build Git-source deployment containers
         env:
           SOURCE_SHA: ${{ github.sha }}
         run: |
@@ -221,16 +221,6 @@ jobs:
         run: python .github/scripts/run_backend.py browser
       - name: Ensure browser tests did not change the release build
         run: python .github/scripts/frontend_artifact.py verify "${{ github.sha }}"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-images-${{ github.sha }}
-          path: |
-            .local/release-images.tar
-            .local/release-manifest.json
-          include-hidden-files: true
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
       - name: Retain browser evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -239,6 +229,7 @@ jobs:
           include-hidden-files: true
           path: |
             .local/browser.xml
+            .local/release-manifest.json
             .local/*.png
             .local/w11-*.json
             .local/database-version.json
@@ -259,7 +250,6 @@ jobs:
       url: ${{ vars.DEPLOY_URL }}
     permissions:
       contents: read
-      packages: write
     env:
       DEPLOY_URL: ${{ vars.DEPLOY_URL }}
       CLOUDTYPE_TOKEN: ${{ secrets.CLOUDTYPE_TOKEN }}
@@ -272,16 +262,7 @@ jobs:
           python-version: 3.12.6
       - name: Require deploy configuration and current main SHA
         run: python .github/scripts/deploy.py preflight
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-images-${{ github.sha }}
-          path: .local
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish tested images and deploy immutable digests
+      - name: Deploy verified Git commit (free source build)
         run: python .github/scripts/deploy.py
       - name: Public HTTPS read/save and exact revision smoke
         run: python .github/scripts/smoke.py
@@ -293,7 +274,6 @@ jobs:
           include-hidden-files: true
           path: |
             .local/release-manifest.json
-            .local/published-images.json
             .local/cloudtype-release.json
           if-no-files-found: warn
           retention-days: 30

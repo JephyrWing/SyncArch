@@ -1,4 +1,4 @@
-"""Publish tested images and deploy by digest, with no production secrets in files.
+"""Deploy the CI-verified Git commit; Cloudtype builds privately from source.
 
 Cloudtype request contract follows the official deploy action at
 cloudtype-github-actions/deploy@43cf563907c5451c12ecc4461bdbf02e61528d1d/src/action.ts.
@@ -13,7 +13,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener
 
-from frontend_artifact import digest
 from smoke import NoRedirect
 
 
@@ -31,46 +30,21 @@ def preflight():
         raise ValueError('Superseded release: main has advanced; deploy the latest successful run')
 
 
-def render(images):
+def render(sha):
+    if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha):
+        raise ValueError('Cloudtype must deploy a full immutable Git commit SHA')
     docs = json.loads(Path('.cloudtype/services.json').read_text(encoding='utf-8'))
-    assert {doc['name'] for doc in docs} == {'frontend', 'syncarch-api'}
+    assert {doc['name'] for doc in docs} == {'syncarch-web', 'syncarch-api'}
     for doc in docs:
-        image = images['backend' if doc['name'] == 'syncarch-api' else 'frontend']
-        if not re.fullmatch(r'ghcr\.io/[a-z0-9_./-]+@sha256:[0-9a-f]{64}', image):
-            raise ValueError('Cloudtype must deploy immutable GHCR image digests')
-        doc['options']['image'] = image
+        assert doc['app'] == 'dockerfile'
+        assert doc['context']['git']['url'] == 'https://github.com/JephyrWing/SyncArch.git'
+        doc['context']['git']['ref'] = sha
+        doc['options']['env'].append({'name': 'RELEASE_SHA', 'value': sha})
     return docs
 
 
-def publish():
-    manifest = json.loads(Path('.local/release-manifest.json').read_text(encoding='utf-8'))
-    sha = os.environ['GITHUB_SHA']
-    assert manifest['revision'] == sha, 'Release artifact belongs to another source revision'
-    assert digest(Path('.local/release-images.tar')) == manifest['archiveSha256'], 'Release archive changed'
-    subprocess.run(['docker', 'load', '-i', '.local/release-images.tar'], check=True)
-    images = {}
-    for service in ('frontend', 'backend'):
-        expected = manifest['images'][service]
-        details = json.loads(subprocess.check_output(['docker', 'image', 'inspect', expected['name']], text=True))[0]
-        assert details['Id'] == expected['id']
-        assert details['Config']['Labels']['org.opencontainers.image.revision'] == sha
-        target = 'ghcr.io/' + os.environ['GITHUB_REPOSITORY'].lower() + '-' + service + ':' + sha
-        subprocess.run(['docker', 'tag', expected['id'], target], check=True)
-        pushed = subprocess.run(['docker', 'push', target], text=True, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, check=True).stdout
-        match = re.search(r'digest: (sha256:[0-9a-f]{64})', pushed)
-        assert match, 'Registry did not return an immutable manifest digest'
-        image = target.rsplit(':', 1)[0] + '@' + match[1]
-        subprocess.run(['docker', 'pull', image], check=True)
-        actual = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image], text=True))[0]
-        assert actual['Id'] == expected['id'], 'Published image differs from the tested container'
-        images[service] = image
-    Path('.local/published-images.json').write_text(json.dumps({'revision': sha, 'images': images}, indent=2), encoding='utf-8')
-    return images
-
-
-def deploy(images):
-    docs = render(images)
+def deploy(sha):
+    docs = render(sha)
     Path('.local/cloudtype-release.json').write_text(json.dumps(docs, indent=2), encoding='utf-8')
     request = Request('https://app.cloudtype.io/api/project/gad03302/syncarch/deploy', method='PUT',
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + os.environ['CLOUDTYPE_TOKEN']},
@@ -83,7 +57,7 @@ def deploy(images):
                 raise RuntimeError('Cloudtype rejected deployment; inspect its service events')
     except (HTTPError, URLError):
         raise RuntimeError('Cloudtype deployment failed; response contents suppressed') from None
-    print('Cloudtype accepted frontend/backend immutable images; public smoke is still required')
+    print('Cloudtype accepted the verified Git commit; source rebuild and public smoke are still required')
 
 
 if __name__ == '__main__':
@@ -92,4 +66,4 @@ if __name__ == '__main__':
         preflight()
     else:
         preflight()
-        deploy(publish())
+        deploy(os.environ['GITHUB_SHA'])

@@ -31,19 +31,22 @@ class ReleaseGateTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             validate('nonexistent-required-report.xml')
 
-    def test_deployment_rejects_mutable_tags(self):
-        with self.assertRaises(ValueError):
-            render({'frontend': 'ghcr.io/jephyrwing/syncarch-frontend:latest',
-                    'backend': 'ghcr.io/jephyrwing/syncarch-backend:main'})
+    def test_deployment_rejects_mutable_git_refs(self):
+        for ref in ('main', 'refs/heads/main', 'latest', 'a'*39, 'A'*40, None):
+            with self.subTest(ref=ref), self.assertRaises(ValueError):
+                render(ref)
 
     def test_only_two_app_services_and_secret_references(self):
-        images = {name: 'ghcr.io/jephyrwing/syncarch-' + name + '@sha256:' + 'a'*64
-                  for name in ('frontend', 'backend')}
-        docs = render(images)
-        self.assertEqual([doc['name'] for doc in docs], ['syncarch-api', 'frontend'])
-        backend = docs[0]
-        self.assertEqual(backend['resources']['replicas'], 1)
-        self.assertTrue(all(set(env) == {'name', 'secret'} for env in backend['options']['env']))
+        docs = render('a'*40)
+        self.assertEqual([doc['name'] for doc in docs], ['syncarch-api', 'syncarch-web'])
+        for doc in docs:
+            self.assertEqual(doc['app'], 'dockerfile')
+            self.assertEqual(doc['context']['git']['ref'], 'a'*40)
+            self.assertNotIn('image', doc['options'])
+            self.assertEqual(doc['resources']['replicas'], 1)
+            public_revision = doc['options']['env'][-1]
+            self.assertEqual(public_revision, {'name': 'RELEASE_SHA', 'value': 'a'*40})
+        self.assertTrue(all(set(env) == {'name', 'secret'} for env in docs[0]['options']['env'][:-1]))
         self.assertNotIn('mariadb', json.dumps(docs))
 
     def test_non_main_events_cannot_deploy(self):

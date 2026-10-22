@@ -1,9 +1,9 @@
 [
   {
     "name": "syncarch-api",
-    "app": "container",
+    "app": "dockerfile",
     "options": {
-      "image": "BACKEND_IMAGE",
+      "dockerfile": "deploy/backend/Dockerfile",
       "ports": 5000,
       "start": "",
       "env": [
@@ -27,17 +27,19 @@
         {"name": "JWT_REFRESH_TOKEN_EXPIRES", "secret": "JWT_REFRESH_TOKEN_EXPIRES"}
       ]
     },
+    "context": {"git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "SOURCE_SHA"}},
     "resources": {"memory": 0.25, "replicas": 1}
   },
   {
-    "name": "frontend",
-    "app": "container",
+    "name": "syncarch-web",
+    "app": "dockerfile",
     "options": {
-      "image": "FRONTEND_IMAGE",
+      "dockerfile": "deploy/frontend/Dockerfile",
       "ports": 8080,
       "start": "",
       "env": [{"name": "API_UPSTREAM", "value": "http://syncarch-api:5000"}]
     },
-    "resources": {"memory": 0.125, "replicas": 1}
+    "context": {"git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "SOURCE_SHA"}},
+    "resources": {"memory": 0.25, "replicas": 1}
   }
 ]
