@@ -29,14 +29,16 @@ def test_server_valid_minimal_document_renders_and_edits(browser_session,area,st
         path=f'/api/projects/{pid}/document';body=save_request(api(setup,'GET',path)['data'])
         identifier=str(uuid4());body['payload'][area]=[dict(id=identifier,**item)]
         assert api(setup,'PUT',path,body)['status']==200
-        page.reload();page.get_by_role('button',name=step,exact=True).click()
+        page.reload();page.get_by_role('button',name='W11 minimum '+area,exact=False).click()
+        page.get_by_role('button',name=step,exact=True).click()
         expect(page.get_by_text(item['name'],exact=True).first).to_be_visible()
         page.get_by_placeholder(SUMMARY).fill('minimum document remains editable')
         expect(page.get_by_role('status').filter(has_text='저장됨')).to_be_visible(timeout=15000)
         saved=api(setup,'GET',path)['data']
         assert saved['project']['summary']=='minimum document remains editable'
         assert saved['payload'][area][0]['id']==identifier
-        page.reload();page.get_by_role('button',name=step,exact=True).click()
+        page.reload();page.get_by_role('button',name='W11 minimum '+area,exact=False).click()
+        page.get_by_role('button',name=step,exact=True).click()
         expect(page.get_by_text(item['name'],exact=True).first).to_be_visible()
     finally:context.close()
 
