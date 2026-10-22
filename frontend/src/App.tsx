@@ -80,6 +80,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   const [isListLoaded, setIsListLoaded] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<StepNumber>(1);
+  // [ERD 설계] 서버 저장 계약은 mariadb만 받는다. 다른 DBMS는 SQL 미리보기·내보내기용 개인 화면 선택이다.
+  const [previewDbms, setPreviewDbms] = useState<SqlDialect>('mariadb');
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const pushToast = (text: string, details: string[] = [], key?: string) => {
@@ -383,13 +385,10 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   );
 
   // [공통 화면] 단계 잠금 전환
-  const handleToggleLock = (step: StepNumber) => {
-    updateCurrentProject({
-      stepLocks: {
-        ...currentProject.stepLocks,
-        [step]: !currentProject.stepLocks[step],
-      },
-    });
+  // shortcut: 서버 계약(W05)은 stepLocks를 읽기 전용으로 보존한다. 저장한 척 되돌아가지 않도록 바꾸지 않고 안내만 한다.
+  // 서버가 잠금 저장을 지원하면 stepLocks를 갱신하던 예전 처리로 되돌린다.
+  const handleToggleLock = (_step: StepNumber) => {
+    pushToast('단계 잠금은 아직 저장되지 않습니다', ['팀 문서 저장 계약에서 단계 잠금은 읽기 전용입니다.']);
   };
 
   // [공통 화면] 스냅샷 처리
@@ -590,35 +589,23 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   const handleSwitchArchVersion = (versionId: string) => {
     const targetVer = currentProject.archVersions.find((v) => v.id === versionId);
     if (targetVer) {
+      // [시스템 아키텍처] 저장된 버전의 구성으로 되돌린다. currentArchVersionId는 서버가 읽기 전용으로 보존해서 바꾸지 않는다.
       updateCurrentProject({
-        currentArchVersionId: versionId,
         nodes: JSON.parse(JSON.stringify(targetVer.nodes)),
         connections: JSON.parse(JSON.stringify(targetVer.connections)),
       });
     }
   };
 
-  const handleSaveNewArchVersion = (versionNumber: string, label: string, description: string) => {
-    const newVerId = crypto.randomUUID();
-    const newVersion: ArchVersion = {
-      id: newVerId,
-      versionNumber,
-      label,
-      description,
-      createdAt: new Date().toLocaleDateString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      nodes: JSON.parse(JSON.stringify(currentProject.nodes)),
-      connections: JSON.parse(JSON.stringify(currentProject.connections)),
-    };
-
-    updateCurrentProject({
-      archVersions: [...currentProject.archVersions, newVersion],
-      currentArchVersionId: newVerId,
-    });
+  // shortcut: 서버 계약(W05)은 archVersions를 읽기 전용으로 보존한다. 저장한 척 사라지지 않도록 안내만 한다.
+  // 프로젝트 전체 버전 기록은 상단 스냅샷(활동 이력)을 쓴다. 서버가 아키텍처 버전 저장을 지원하면 되돌린다.
+  const handleSaveNewArchVersion = (_versionNumber: string, _label: string, _description: string) => {
+    pushToast('아키텍처 버전은 아직 저장되지 않습니다', ['팀 문서 저장 계약에서 아키텍처 버전은 읽기 전용입니다.']);
   };
 
   // [ERD 설계] Step 4 처리와 대상 DBMS
   const handleChangeTargetDbms = (dbms: SqlDialect) => {
-    updateCurrentProject({ targetDbms: dbms });
+    setPreviewDbms(dbms);
   };
 
   const handleAddTable = (table: Omit<ErdTable, 'id'>) => {
@@ -825,7 +812,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
           <Step4ErdStudio
             tables={currentProject.tables}
             features={currentProject.features}
-            targetDbms={currentProject.targetDbms}
+            targetDbms={previewDbms}
             onChangeTargetDbms={handleChangeTargetDbms}
             onAddTable={handleAddTable}
             onUpdateTable={handleUpdateTable}
@@ -857,7 +844,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
         nodes={currentProject.nodes}
         connections={currentProject.connections}
         tables={currentProject.tables}
-        defaultDbms={currentProject.targetDbms}
+        defaultDbms={previewDbms}
       />
 
       {/* [채팅] 편집하면서 팀원과 이야기하는 대화창 */}
