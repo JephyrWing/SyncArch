@@ -105,7 +105,7 @@ export const FeatureDetail: React.FC<FeatureDetailProps> = ({ feature: selectedF
               <span className="flex items-center gap-1">
                 <Code2 className="w-3.5 h-3.5" /> Response Payload (Schema)
               </span>
-              <span className="text-[10px] text-emerald-500 font-mono">200 OK</span>
+              <span className="text-[10px] text-emerald-500 font-mono">{selectedFeature.responseStatusCodes?.join(', ') || '응답 상태 미지정'}</span>
             </div>
             <pre className="p-2.5 bg-slate-950 rounded-lg text-xs font-mono text-slate-200 border border-slate-800 whitespace-pre-wrap overflow-x-auto">
               {selectedFeature.responseFields}

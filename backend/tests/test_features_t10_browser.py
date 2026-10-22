@@ -2,6 +2,7 @@
 from copy import deepcopy
 from uuid import UUID,uuid4
 from pathlib import Path
+import json
 from playwright.sync_api import expect
 from test_auth import auth_app
 from test_auth_browser import browser_session,open_page,sign_in
@@ -185,3 +186,27 @@ def test_feat03_middle_delete_create_two_accounts_and_reference_preservation(bro
         assert len({f['displayCode'] for f in final['payload']['features']})==5
         assert final['payload']['tables']==before['payload']['tables']
     finally:a.close();b.close()
+
+def test_feat_api_download_uses_edited_method_body_codes_and_one_yaml_path(browser_session):
+    browser,origin=browser_session;context=browser.new_context()
+    try:
+        page,setup,pid,path=setup_case(context,origin)
+        body=save_request(api(setup,'GET',path)['data']);feature=body['payload']['features'][0]
+        feature.update(name='Quoted "API"',responseStatusCodes=['201 Created','409 Conflict'])
+        body['payload']['features'].append(dict(feature,id=str(uuid4()),method='GET',name='Read API'))
+        assert api(setup,'PUT',path,body)['status']==200
+        reopen(page,origin);page.get_by_role('button',name='API 명세서 자동화',exact=True).click()
+        with page.expect_download() as result:page.get_by_role('button',name='다운로드',exact=True).click()
+        value=json.loads(Path(result.value.path()).read_text(encoding='utf-8'))
+        paths=value['paths'];assert len(paths)==1
+        assert set(paths[feature['endpoint']])=={'post','get'}
+        assert set(paths[feature['endpoint']]['post']['responses'])=={'201','409'}
+        assert paths[feature['endpoint']]['post']['requestBody']['content']['application/json']['schema']['example']==feature['requestFields']
+        assert 'requestBody' not in paths[feature['endpoint']]['get']
+        page.get_by_role('button',name='Swagger YAML',exact=True).click()
+        with page.expect_download() as result:page.get_by_role('button',name='다운로드',exact=True).click()
+        yaml=Path(result.value.path()).read_text(encoding='utf-8')
+        assert yaml.count(feature['endpoint'])==1 and '201' in yaml and '409' in yaml
+        assert 'Quoted \\"API\\"' in yaml
+        page.screenshot(path=str(Path(__file__).resolve().parents[2]/'.local/w11-t10-api.png'))
+    finally:context.close()
