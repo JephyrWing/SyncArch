@@ -1,10 +1,7 @@
 """초대 코드 발급과 코드로 참가하기입니다. 코드를 아는 로그인 사용자는 EDITOR로 참가합니다."""
 import secrets
 
-from sqlalchemy import select
-
 from ..errors import InviteCodeNotFound, ProjectArchived, ProjectNotFound
-from ..models import Project
 from ..repositories import project_repository as projects, member_repository as members
 from .project_access import require_access, require_active_actor
 from .project_events import publish
@@ -17,7 +14,7 @@ ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 def _new_code(session):
     while True:
         code = "".join(secrets.choice(ALPHABET) for _ in range(8))
-        if session.scalar(select(Project.id).where(Project.invite_code == code)) is None:
+        if projects.find_by_invite_code(session, code) is None:
             return code
 
 
@@ -44,7 +41,7 @@ def join_by_code(session_factory, actor_id, code):
     with session_factory.begin() as session:
         actor = require_active_actor(session, actor_id)
         # 잠금 순서는 projects -> project_members -> project_documents입니다(project_access 참고).
-        project = session.scalar(select(Project).where(Project.invite_code == code).with_for_update())
+        project = projects.find_by_invite_code(session, code, lock=True)
         if project is None:
             raise InviteCodeNotFound()
         if project.archived_at is not None:

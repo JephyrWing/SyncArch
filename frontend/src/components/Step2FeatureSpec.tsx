@@ -6,14 +6,15 @@ import { AddFeatureForm } from './step2/AddFeatureForm.tsx';
 import { FeatureList } from './step2/FeatureList.tsx';
 import { FeatureDetail } from './step2/FeatureDetail.tsx';
 import { ApiDocModal } from './step2/ApiDocModal.tsx';
-import { voteCount } from '../utils/votes.ts';
+import { EditFeatureModal } from './step2/EditFeatureModal.tsx';
+import { ImportIdeasModal } from './step2/ImportIdeasModal.tsx';
 
 interface Step2FeatureSpecProps {
   features: FeatureSpec[];
   onAddFeature: (feature: Omit<FeatureSpec, 'id'>) => void;
   onUpdateFeature: (id: string, updated: Partial<FeatureSpec>) => void;
   onDeleteFeature: (id: string) => void;
-  onImportFromStep1: () => void;
+  onImportFromStep1: (ids: string[]) => void;
   ideas: IdeaCard[];
   teamMembers: TeamMember[];
   isLocked: boolean;
@@ -46,12 +47,14 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
   const [selectedFeatureId, setSelectedFeatureId] = useState<string>(features[0]?.id || '');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showApiDocModal, setShowApiDocModal] = useState(false);
+  const [editing, setEditing] = useState<FeatureSpec | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   // [기능 명세] 필터
   const [filterStatus, setFilterStatus] = useState<FeatureProgressStatus | 'ALL'>('ALL');
   const [filterAssignee, setFilterAssignee] = useState<string>('ALL');
 
-  const highVoteCardsCount = ideas.filter((i) => voteCount(i) >= 4).length;
+  const availableIdeasCount = ideas.filter(i => !features.some(f => f.relatedStoryId === i.id)).length;
 
   // [기능 명세] 전체 진행률 계산
   const totalCount = features.length;
@@ -151,16 +154,16 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
               <span className="text-slate-300">
-                Step 1 고득표(4표 이상) 아이디어: <strong className="text-indigo-300">{highVoteCardsCount}건</strong>
+                가져올 수 있는 아이디어: <strong className="text-indigo-300">{availableIdeasCount}건</strong>
               </span>
             </div>
             <button
-              onClick={onImportFromStep1}
-              disabled={highVoteCardsCount === 0 || isLocked}
+              onClick={() => setShowImport(true)}
+              disabled={ideas.length === 0 || isLocked}
               className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 disabled:opacity-40 border border-indigo-500/40 text-indigo-200 rounded text-[11px] font-bold flex items-center gap-1 transition-colors"
             >
               <ArrowRight className="w-3 h-3" />
-              <span>기능으로 자동 임포트</span>
+              <span>아이디어 선택하여 가져오기</span>
             </button>
           </div>
         </div>
@@ -181,12 +184,14 @@ export const Step2FeatureSpec: React.FC<Step2FeatureSpecProps> = ({
             isDesktop ? 'flex-1 min-w-0 flex' : (mobileTab === 'canvas' ? 'w-full flex' : 'hidden')
           }`}
         >
-          <FeatureDetail feature={selectedFeature} />
+          <FeatureDetail feature={selectedFeature} onEdit={isLocked ? undefined : () => selectedFeature && setEditing(selectedFeature)} />
         </div>
       </div>
 
       {/* [기능 명세] API 문서 자동 생성 모달 */}
       <ApiDocModal open={showApiDocModal} features={features} onClose={() => setShowApiDocModal(false)} />
+      {editing && <EditFeatureModal feature={editing} members={teamMembers} onSave={onUpdateFeature} onClose={() => setEditing(null)} />}
+      {showImport && <ImportIdeasModal ideas={ideas} features={features} onImport={onImportFromStep1} onClose={() => setShowImport(false)} />}
     </div>
   );
 };

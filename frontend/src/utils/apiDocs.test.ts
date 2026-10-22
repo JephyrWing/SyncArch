@@ -52,3 +52,12 @@ test('Markdown table shows Korean status labels', () => {
   assert.match(md, /\| 출석 \| \*\*POST\*\* \| `\/api\/v1\/attendance` \| QR 출석 \| P0 \| QA 검증 \| 현우 \|/);
   assert.match(md, /\| 계획 \| 수민 \|/);
 });
+
+test('edited status codes appear in OpenAPI and YAML groups a shared path exactly once with escaped text', () => {
+  const edited = features.map(f=>({...f,name:'A "quoted" API',responseStatusCodes:['201 Created','409 Conflict']}));
+  const doc = JSON.parse(generateOpenApiJson(edited));
+  assert.deepEqual(Object.keys(doc.paths['/api/v1/attendance'].post.responses),['201','409']);
+  const yaml = generateOpenApiYaml(edited);
+  assert.equal(yaml.split('/api/v1/attendance').length-1,1);
+  assert.ok(yaml.includes('A \\"quoted\\" API'));
+});

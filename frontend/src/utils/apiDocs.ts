@@ -35,7 +35,9 @@ export const generateOpenApiJson = (features: FeatureSpec[]) => {
           },
         },
       } : undefined,
-      responses: {
+      responses: f.responseStatusCodes?.length ? Object.fromEntries(f.responseStatusCodes.map(code=>[code.slice(0,3), {
+        description: code.slice(4) || code.slice(0,3), content: {'application/json': {schema: {type:'object',example:f.responseFields}}},
+      }])) : {
         '200': {
           description: '성공 응답',
           content: {
@@ -67,40 +69,14 @@ export const generateOpenApiJson = (features: FeatureSpec[]) => {
 
 // [기능 명세] OpenAPI YAML 생성
 export const generateOpenApiYaml = (features: FeatureSpec[]) => {
-  const lines: string[] = [
-    'openapi: 3.0.3',
-    'info:',
-    '  title: SyncArch Auto-generated API Documentation',
-    '  version: 1.0.0',
-    '  description: SyncArch에서 자동 생성된 REST API 명세서',
-    'paths:',
-  ];
-
-  features.forEach((f) => {
-    if (!f.method || !f.endpoint) return;
-    lines.push(`  ${f.endpoint}:`);
-    lines.push(`    ${f.method.toLowerCase()}:`);
-    lines.push(`      summary: "${f.name}"`);
-    lines.push(`      description: "${f.summary}"`);
-    lines.push(`      tags: ["${f.domain}"]`);
-    if (f.method !== 'GET') {
-      lines.push('      requestBody:');
-      lines.push('        required: true');
-      lines.push('        content:');
-      lines.push('          application/json:');
-      lines.push('            schema:');
-      lines.push('              type: object');
-    }
-    lines.push('      responses:');
-    lines.push("        '200':");
-    lines.push('          description: "성공 응답"');
-    lines.push("        '400':");
-    lines.push('          description: "잘못된 요청"');
-    lines.push("        '500':");
-    lines.push('          description: "서버 내부 오류"');
+  // JSON과 같은 단일 경로/메서드 구조를 사용한다. 문자열과 비식별자 키는 JSON 인용으로 YAML에서도 안전하다.
+  const render = (node: Record<string, unknown>, indent = 0): string[] => Object.entries(node).flatMap(([key,value]) => {
+    const name = /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? key : JSON.stringify(key);
+    const prefix = ' '.repeat(indent) + name + ':';
+    return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length
+      ? [prefix, ...render(value as Record<string,unknown>,indent+2)] : [prefix+' '+JSON.stringify(value)];
   });
-
-  return lines.join('\n');
+  return render(JSON.parse(generateOpenApiJson(features))).join('\n');
 };
 
 // [기능 명세] Markdown API 표 생성
