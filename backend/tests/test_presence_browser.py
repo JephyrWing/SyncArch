@@ -32,9 +32,11 @@ def test_closing_one_tab_keeps_the_other_tab_online_and_removed_member_drops_at_
         watcher = open_page(editor_context, origin)
         sign_in(watcher, "auth-b")
 
-        # 두 실제 탭의 heartbeat로 팀장이 접속 중입니다.
+        # 두 실제 탭의 heartbeat로 팀장이 접속 중이고, 편집자 화면 머리글에도 접속 중으로 보입니다.
         expect(editor.get_by_placeholder(SUMMARY)).to_be_visible()
         assert "검증 A" in online_names(watcher, pid)[1]
+        owner_avatar = editor.locator('header button[title^="검증 A"][title*="보는 중"]')
+        expect(owner_avatar).to_be_visible(timeout=10000)
 
         # 탭 A만 목록으로 나가면 그 탭의 DELETE가 탭 B의 접속까지 지우지 않아야 합니다.
         tab_a.bring_to_front()
