@@ -36,7 +36,10 @@ GitHub가 `startup_failure` 또는 테스트 종료 후 진행 중 상태를 반
 
 develop과 PR에서는 배포하지 않는다. main push의 같은 워크플로에서 네 체크가
 모두 성공해야 배포 job이 시작한다. 사용자 요청에 따라 두 서비스의 Cloudtype
-context.git.ref는 main 브랜치로 유지한다. 검사한 전체 40자리 SHA는 RELEASE_SHA로
+context.git.ref는 `refs/heads/main`으로 명시해 main 브랜치로 유지한다.
+Cloudtype가 생성하는 GitHub Actions 설정의 github.ref와 같은 전체 ref 형식이다.
+짧은 `main`은 콘솔의 브랜치 설정에 반영되지 않아 기본 브랜치를 선택할 수 있다.
+검사한 전체 40자리 SHA는 RELEASE_SHA로
 기록하고 공개 응답과 대조한다. 배포 직전 main head를 확인하지만 브랜치는 이동할 수
 있으므로 소스 체크아웃의 불변성을 보장하지 않는다. 무료 Git 소스 빌드를 사용하며
 GHCR push/pull과 비공개 레지스트리 구독은 사용하지 않는다.
