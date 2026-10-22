@@ -12,8 +12,9 @@ LABEL org.opencontainers.image.revision="${RELEASE_SHA}"
 USER root
 COPY --from=builder /app/frontend/dist/ /usr/share/nginx/html/
 COPY deploy/frontend/default.conf.template /etc/nginx/templates/default.conf.template
+COPY --chmod=755 deploy/frontend/19-upstream.envsh /docker-entrypoint.d/19-upstream.envsh
 COPY --chmod=755 deploy/frontend/40-release.sh /docker-entrypoint.d/40-release.sh
 RUN chown -R 1000:1000 /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx
-ENV API_UPSTREAM=http://syncarch-api:5000 NGINX_ENVSUBST_FILTER=API_UPSTREAM RELEASE_SHA=${RELEASE_SHA}
+ENV API_UPSTREAM=http://syncarch-api:5000 NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 NGINX_ENVSUBST_FILTER="^(API_UPSTREAM|NGINX_LOCAL_RESOLVERS)$" RELEASE_SHA=${RELEASE_SHA}
 USER 1000:1000
 EXPOSE 8080

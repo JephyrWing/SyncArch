@@ -75,6 +75,9 @@ Presence가 프로세스 메모리를 사용하므로 backend replica를 늘리�
 프런트 Dockerfile은 고정 Node 버전과 npm ci로 소스에서 dist를 빌드한다.
 배포 도구가 지정한 공개 RELEASE_SHA만 시작 시 release.json에 기록한다.
 Nginx는 같은 호스트로 API를 전달하고 Host·쿠키·ETag·304를 유지한다.
+컨테이너의 DNS 서버로 백엔드 주소를 5초마다 갱신하며 Kubernetes 검색 도메인을
+짧은 서비스명에 적용한다. 백엔드 재배포로 내부 IP가 바뀌어도 프런트 재시작이 필요 없다.
+필수 컨테이너 smoke는 DNS 응답 IP를 실제로 바꾸고 같은 Nginx의 복구와 URI 보존을 검사한다.
 OAuth callback query가 프록시 로그에 남지 않게 한다.
 Waitress는 외부 forwarded header를 신뢰하지 않는다.
 Secure 쿠키는 APP_ENV=demo에서 설정하고 OAuth redirect URI는 고정된 공개 URL을 사용한다.
