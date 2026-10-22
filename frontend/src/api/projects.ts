@@ -1,4 +1,5 @@
-import { request, setCsrfToken } from './client.ts';
+import { request } from './client.ts';
+import { authClient } from './auth.ts';
 import type {
   DocumentPayload,
   ChatMessage,
@@ -24,34 +25,28 @@ export interface SaveDocumentResult {
   replayed: boolean;
 }
 
-export const fetchMe = async (): Promise<SessionUser> =>
-  (await request<{ user: SessionUser }>('GET', '/api/auth/me')).data!.user;
+/** [로그인] 리프레시 쿠키가 있으면 액세스 토큰을 새로 받아 로그인 상태를 복구한다. */
+export const fetchMe = (): Promise<SessionUser> => authClient.me();
 
-/** [구글 로그인] 백엔드가 내려주는 구글 OAuth 클라이언트 ID(GOOGLE_CLIENT_ID가 없으면 빈 값). */
-export const fetchGoogleClientId = async (): Promise<string> => {
-  const data = (await request<{ csrfToken: string; googleClientId: string }>('GET', '/api/auth/csrf')).data!;
-  setCsrfToken(data.csrfToken);
-  return data.googleClientId;
+export const loginWithPassword = (loginId: string, password: string): Promise<SessionUser> =>
+  authClient.login(loginId, password);
+
+export const fetchAuthOptions = async (): Promise<{ googleEnabled: boolean }> => {
+  const data = (await request<{ google: { enabled: boolean } }>('GET', '/api/auth/options')).data!;
+  return { googleEnabled: data.google.enabled };
 };
 
-/** [구글 로그인] 구글 버튼이 준 ID 토큰을 서버 세션으로 바꾼다. */
-export const loginWithGoogle = async (credential: string): Promise<SessionUser> => {
-  const data = (await request<{ user: SessionUser; csrfToken: string }>('POST', '/api/auth/login', { credential })).data!;
-  // [구글 로그인] 서버가 새 세션용 CSRF 토큰을 새로 발급한다.
-  setCsrfToken(data.csrfToken);
-  return data.user;
-};
+/** [구글 로그인] 서버가 만든 구글 인증 주소. 로그인 후 /auth/callback으로 돌아오며 리프레시 쿠키가 설정된다. */
+export const startGoogleLogin = async (): Promise<string> =>
+  (await request<{ authorizationUrl: string }>('POST', '/api/auth/google/start', {})).data!.authorizationUrl;
 
-export const logout = async (): Promise<void> => {
-  await request('POST', '/api/auth/logout');
-  setCsrfToken('');
-};
+export const logout = (): Promise<void> => authClient.logout();
 
 export const listProjects = async (): Promise<ProjectSummary[]> =>
   (await request<ProjectSummary[]>('GET', '/api/projects')).data!;
 
-export const createProject = async (title: string, summary: string): Promise<ProjectSummary> =>
-  (await request<ProjectSummary>('POST', '/api/projects', { title, summary })).data!;
+export const createProject = async (title: string, summary: string, categoryTag = ''): Promise<ProjectSummary> =>
+  (await request<ProjectSummary>('POST', '/api/projects', { title, summary, categoryTag })).data!;
 
 export const cloneProject = async (id: string, sourceVersion: number, title: string): Promise<ProjectSummary> =>
   (await request<ProjectSummary>('POST', `/api/projects/${id}/clone`, { sourceVersion, title })).data!;
@@ -92,5 +87,7 @@ export const leavePresence = async (id: string): Promise<void> => {
   await request('DELETE', `/api/projects/${id}/presence`);
 };
 
+// [멤버 관리] 서버는 사용자 ID를 id로 준다. 화면은 userId를 쓴다.
 export const listMembers = async (id: string): Promise<ProjectMemberInfo[]> =>
-  (await request<ProjectMemberInfo[]>('GET', `/api/projects/${id}/members`)).data!;
+  (await request<(Omit<ProjectMemberInfo, 'userId'> & { id: string })[]>('GET', `/api/projects/${id}/members`)).data!
+    .map(({ id: userId, ...member }) => ({ ...member, userId }));

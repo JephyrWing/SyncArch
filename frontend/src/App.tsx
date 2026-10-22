@@ -55,7 +55,10 @@ export default function App() {
   const [me, setMe] = useState<SessionUser | null | undefined>(undefined);
 
   useEffect(() => {
-    fetchMe().then(setMe).catch(() => setMe(null));
+    fetchMe().then(setMe).catch(() => setMe(null)).finally(() => {
+      // [구글 로그인] 서버 콜백이 /auth/callback으로 돌려보낸다. 로그인 상태를 확인한 뒤 주소를 정리한다.
+      if (window.location.pathname === '/auth/callback') window.history.replaceState(null, '', '/');
+    });
   }, []);
 
   if (me === undefined) {
@@ -243,8 +246,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
     try {
       await logout();
     } catch (error) {
-      // [구글 로그인] 401은 서버 세션이 이미 없다는 뜻이다. 다른 실패면 세션은 살아 있다.
-      if (!(error instanceof ApiError && error.status === 401)) {
+      // [로그인] 401은 서버 세션이 이미 없다는 뜻이다. 다른 실패면 세션은 살아 있다.
+      if ((error as { status?: number }).status !== 401) {
         pushToast('로그아웃하지 못했습니다', [(error as Error).message]);
         return;
       }
@@ -348,15 +351,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   async function handleCreateProject(title: string, summary: string, categoryTag: string, targetDbms: SqlDialect) {
     if (!guardLeave()) return;
     try {
-      const created = await createProject(title, summary);
-      if (categoryTag || targetDbms !== created.targetDbms) {
-        await saveDocument(created.id, {
-          baseVersion: 1,
-          mutationId: crypto.randomUUID(),
-          project: { title, summary, categoryTag, targetDbms },
-          payload: { schemaVersion: 1, ideas: [], features: [], nodes: [], connections: [], tables: [] },
-        });
-      }
+      // [프로젝트] 서버 저장 계약은 mariadb만 받아서 targetDbms는 보내지 않는다(projectAdapter 참고).
+      const created = await createProject(title, summary, categoryTag);
       await refreshProjects(created.id);
     } catch (error) {
       pushToast('프로젝트를 만들지 못했습니다', [(error as Error).message]);

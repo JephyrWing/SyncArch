@@ -1,6 +1,7 @@
 import React from 'react';
 import { Download, FileCode, FileSpreadsheet, Plus, TrendingUp } from 'lucide-react';
 import type { FeatureProgressStatus, TeamMember } from '../../types/index.ts';
+import { downloadFile } from '../../api/client.ts';
 
 interface FeatureSidebarToolbarProps {
   featureCount: number;
@@ -65,7 +66,10 @@ export const FeatureSidebarToolbar: React.FC<FeatureSidebarToolbarProps> = ({
         {excelUrl && (
           <a
             href={excelUrl}
-            download
+            onClick={(e) => {
+              e.preventDefault();
+              downloadFile(excelUrl, 'api-spec.xlsx').catch((err: Error) => window.alert(err.message));
+            }}
             className="px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
             title="마지막으로 저장된 버전의 API 명세를 팀 양식 엑셀(.xlsx)로 받습니다"
           >

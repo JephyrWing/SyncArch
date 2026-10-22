@@ -1,94 +1,47 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layers } from 'lucide-react';
-import { fetchGoogleClientId, loginWithGoogle } from '../api/projects.ts';
+import { fetchAuthOptions, loginWithPassword, startGoogleLogin } from '../api/projects.ts';
 import type { SessionUser } from '../types/index.ts';
-
-// [구글 로그인] Google Identity Services에 필요한 최소 타입(https://developers.google.com/identity/gsi/web).
-interface GoogleIdentity {
-  accounts: {
-    id: {
-      initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void;
-      renderButton: (parent: HTMLElement, options: Record<string, string | number>) => void;
-    };
-  };
-}
-
-declare global {
-  interface Window {
-    google?: GoogleIdentity;
-  }
-}
-
-const GIS_SRC = 'https://accounts.google.com/gsi/client';
-
-const loadGoogleScript = (): Promise<GoogleIdentity> =>
-  new Promise((resolve, reject) => {
-    if (window.google) return resolve(window.google);
-    const script = document.createElement('script');
-    script.src = GIS_SRC;
-    script.async = true;
-    script.onload = () => (window.google ? resolve(window.google) : reject(new Error('google')));
-    script.onerror = () => reject(new Error('google'));
-    document.head.appendChild(script);
-  });
 
 interface LoginScreenProps {
   onLogin: (user: SessionUser) => void;
 }
 
-/** [구글 로그인] 로그인은 구글만 쓴다(팀 결정). 구글 계정이면 누구나 로그인하고 프로젝트는 멤버에게만 보인다. */
+/** [로그인] 구글 로그인(서버 리다이렉트)과 팀원 계정 로그인. 프로젝트는 멤버에게만 보인다. */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
-  const buttonRef = useRef<HTMLDivElement>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'unconfigured' | 'signing-in'>('loading');
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [loginId, setLoginId] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const clientId = await fetchGoogleClientId();
-        if (!clientId) {
-          if (!cancelled) setState('unconfigured');
-          return;
-        }
-        const google = await loadGoogleScript();
-        if (cancelled || !buttonRef.current) return;
-        google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async ({ credential }) => {
-            setState('signing-in');
-            setError('');
-            try {
-              onLogin(await loginWithGoogle(credential));
-            } catch (err) {
-              setError((err as Error).message);
-              setState('ready');
-            }
-          },
-        });
-        google.accounts.id.renderButton(buttonRef.current, {
-          theme: 'filled_black',
-          size: 'large',
-          shape: 'pill',
-          text: 'signin_with',
-          locale: 'ko',
-          width: 300,
-        });
-        setState('ready');
-      } catch (err) {
-        if (cancelled) return;
-        setError(
-          (err as Error).message === 'google'
-            ? '구글 로그인 버튼을 불러오지 못했습니다. 인터넷 연결이나 광고 차단 확장 프로그램을 확인한 뒤 새로고침하세요.'
-            : (err as Error).message
-        );
-        setState('ready');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [onLogin]);
+    fetchAuthOptions().then((options) => setGoogleEnabled(options.googleEnabled)).catch(() => setGoogleEnabled(false));
+  }, []);
+
+  const handleGoogle = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      // [구글 로그인] 구글 인증 후 서버 콜백이 /auth/callback으로 돌려보낸다.
+      window.location.assign(await startGoogleLogin());
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  const handlePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      onLogin(await loginWithPassword(loginId.trim(), password));
+    } catch {
+      setError('아이디 또는 비밀번호를 확인하세요.');
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-slate-950 p-4 font-sans text-slate-100">
@@ -100,21 +53,57 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         <div className="space-y-1">
           <h1 className="text-lg font-bold text-white">팀 설계 공간에 로그인</h1>
           <p className="text-xs text-slate-400">
-            아이디어부터 API, 아키텍처, DB 설계까지 팀이 함께 정리합니다. 구글 계정으로 로그인하세요.
+            아이디어부터 API, 아키텍처, DB 설계까지 팀이 함께 정리합니다.
           </p>
         </div>
 
-        {state === 'unconfigured' ? (
-          <p role="alert" className="rounded-lg border border-amber-700/60 bg-amber-950/60 p-3 text-xs text-amber-200">
-            구글 로그인이 아직 설정되지 않았습니다. 서버의 <code>backend/.env</code>에 <code>GOOGLE_CLIENT_ID</code>를 넣고 서버를 다시 시작하세요.
-          </p>
-        ) : (
-          <div className="flex min-h-[44px] flex-col items-center justify-center gap-2">
-            <div ref={buttonRef} aria-label="Google 계정으로 로그인" />
-            {state === 'loading' && <span className="text-xs text-slate-400">로그인 버튼을 불러오는 중…</span>}
-            {state === 'signing-in' && <span className="text-xs text-slate-400">로그인하는 중…</span>}
-          </div>
+        {googleEnabled && (
+          <>
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={busy}
+              className="w-full rounded-full bg-white py-2 text-sm font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+            >
+              Google 계정으로 로그인
+            </button>
+            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+              <div className="h-px flex-1 bg-slate-800" />
+              <span>또는 팀원 계정</span>
+              <div className="h-px flex-1 bg-slate-800" />
+            </div>
+          </>
         )}
+
+        <form onSubmit={handlePassword} className="space-y-2">
+          <input
+            type="text"
+            autoComplete="username"
+            placeholder="아이디"
+            aria-label="아이디"
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
+            required
+          />
+          <input
+            type="password"
+            autoComplete="current-password"
+            placeholder="비밀번호"
+            aria-label="비밀번호"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
+            required
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {busy ? '로그인하는 중…' : '로그인'}
+          </button>
+        </form>
 
         {error && (
           <p role="alert" className="text-xs text-rose-400">

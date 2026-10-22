@@ -49,7 +49,8 @@ export const toSaveBody = (project: ProjectData, baseVersion: number, mutationId
     title: project.title,
     summary: project.summary,
     categoryTag: project.categoryTag,
-    targetDbms: project.targetDbms,
+    // shortcut: 서버 저장 계약은 mariadb만 받는다(project_schema). 다른 DBMS 선택은 이 화면에서만 유지된다. 계약이 넓어지면 project.targetDbms로 되돌린다.
+    targetDbms: 'mariadb',
   },
   payload: toPayload(project),
 });
