@@ -56,7 +56,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegistered, on
   };
   const input = 'mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm text-white focus:border-indigo-500 focus:outline-none';
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-slate-950 p-4 font-sans text-slate-100">
+    <div className="flex min-h-dvh w-full items-center justify-center bg-slate-950 p-4 font-sans text-slate-100">
       <section className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6">
         <h1 className="text-lg font-bold text-white">SyncArch 회원가입</h1>
         <p className="text-xs text-slate-400">계정을 만든 뒤 로그인해 프로젝트를 만들거나 초대 코드로 참여하세요.</p>

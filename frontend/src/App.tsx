@@ -28,6 +28,7 @@ import {
   listProjects,
   logout,
   saveDocument,
+  setProjectArchived,
 } from './api/projects.ts';
 import { ApiError } from './api/client.ts';
 import { toTeamMembers } from './adapters/projectAdapter.ts';
@@ -78,7 +79,7 @@ export default function App() {
   }, []);
 
   if (me === undefined) {
-    return <div className="flex h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">불러오는 중…</div>;
+    return <div className="flex h-dvh items-center justify-center bg-slate-950 text-sm text-slate-400">불러오는 중…</div>;
   }
   if (!me) return <LoginScreen initialError={googleError} onLogin={(user) => { setMe(user); setGoogleError(''); }} />;
   return <Workspace me={me} onLoggedOut={() => { setMe(null); setGoogleLinked(false); setGoogleError(''); }} googleLinked={googleLinked} googleError={googleError} />;
@@ -120,7 +121,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
   const canLeave = SAFE_TO_LEAVE.includes(doc.status);
 
   const refreshProjects = async (selectId?: string) => {
-    const list = await listProjects();
+    const list = await listProjects(true);
     setProjectList(list);
     setIsListLoaded(true);
     // [프로젝트] await 뒤에 다시 확인한다. 요청 중에 생긴 편집을 두고 다른 프로젝트로 넘어가지 않는다.
@@ -324,6 +325,11 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
     await refreshProjects(joined.id);
     pushToast(`'${joined.title}'에 참가했습니다`, ['같은 화면을 팀원과 실시간으로 함께 편집합니다.']);
   };
+  // [프로젝트] 로비에서 OWNER가 보관·복원한 뒤 서버 목록을 다시 반영한다.
+  const handleLobbyArchive = async (id: string, archived: boolean) => {
+    await setProjectArchived(id, archived);
+    await refreshProjects();
+  };
   const handleBackToLobby = () => {
     if (!guardLeave()) return;
     setCurrentProjectId(null);
@@ -335,14 +341,15 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
       <SaveStatusBadge status={doc.status} version={doc.version} />
       {currentProjectId && <ProjectDashboard key={currentProjectId} projectId={currentProjectId} access={access} documentVersion={doc.version} />}
       <AccountSettings canNavigate={() => doc.isSafeToLeave()} />
-      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} access={access} />}
+      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} access={access}
+        disabled={doc.status === 'readonly' || Boolean(projectList.find((p) => p.id === currentProjectId)?.archivedAt)} />}
       <button
         onClick={handleBackToLobby}
         className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:text-white"
         title="프로젝트 목록(생성·참가)으로"
       >
         <LayoutGrid className="h-3.5 w-3.5" />
-        <span className="hidden xl:inline">목록</span>
+        <span className="hidden 2xl:inline">목록</span>
       </button>
       <button
         onClick={handleLogout}
@@ -350,7 +357,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
         title="로그아웃"
       >
         <LogOut className="h-3.5 w-3.5" />
-        <span className="hidden xl:inline">{me.displayName}</span>
+        <span className="hidden 2xl:inline">{me.displayName}</span>
       </button>
     </div>
   );
@@ -367,6 +374,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
           onOpen={setCurrentProjectId}
           onCreate={handleLobbyCreate}
           onJoin={handleLobbyJoin}
+          onArchive={handleLobbyArchive}
           onLogout={handleLogout}
         />
         {toastStack}
@@ -376,7 +384,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
 
   if (!currentProject) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-slate-950 p-4 text-sm text-slate-300">
+      <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-slate-950 p-4 text-sm text-slate-300">
         {doc.status === 'error' ? (
           <>
             <p className="text-rose-300">{doc.message}</p>
@@ -738,7 +746,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 overflow-hidden select-none">
+    <div className="flex flex-col h-dvh w-screen bg-slate-950 font-sans text-slate-100 overflow-hidden select-none">
       {/* [공통 화면] 프로젝트 전환이 있는 56px 전역 헤더 */}
       <Header
         projects={headerProjects}

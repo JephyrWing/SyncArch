@@ -25,7 +25,7 @@ export const IdeaCardList: React.FC<IdeaCardListProps> = ({ cards, expanded, onT
   });
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="shrink-0 lg:shrink lg:flex-1 flex flex-col lg:overflow-hidden">
       <div className="px-3 py-2 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 shrink-0">
         <span className="font-semibold text-slate-300">표시 중인 아이디어 ({filteredCards.length})</span>
         <div className="flex items-center gap-1">

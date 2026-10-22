@@ -1,12 +1,14 @@
 # SyncArch
 
-React 프로토타입에 Flask + MariaDB 백엔드 기반을 추가한 프로젝트입니다.
+아이디어·기능/API·아키텍처·ERD를 두 사용자 이상이 함께 편집하는 React + Flask + MariaDB 프로젝트입니다.
 프론트엔드 파일은 `frontend/`, Flask 서버는 `backend/`로 분리되어 있습니다.
 기존 React 화면은 유지하고 기본 개발 서버는 Vite로 실행합니다.
 이전 Express/Gemini 서버는 `frontend/server.ts`에 보존하며 `npm run dev:legacy`로만 실행합니다.
 공개 DB 상태 API `/api/health`와 명시적 팀원 계정 초기화 CLI를 제공합니다.
 JWT 인증·Redis RT 회전과 프로젝트·멤버·문서 원자 저장·활동/대시보드 API를 제공합니다.
-프론트 저장 화면 연결은 W06, 실제 웹소켓 전달은 W15 후속 작업입니다.
+로그인·계정 연결·프로젝트 초대·보관/복원·문서 저장 화면이 연결되어 있습니다.
+협업은 HTTP 폴링과 3-way 병합을 사용합니다. 문서는 변경 후 300ms에 저장하고 1초마다 ETag로 조회합니다.
+현재 계약과 원본 문서 위치는 [현재 구현 계약](docs/project-contract.md), 시연·운영 인계는 [릴리스 인계](docs/final-release-handoff.md)를 참고합니다.
 
 ## 구조
 
@@ -142,7 +144,7 @@ Flask는 기본 개발 포트 5000에서 실행됩니다. React 빌드가 있으
 `GET /api/health`는 DB에 `SELECT 1`을 실행한 뒤
 `{"data":{"status":"ok","database":"ok"}}`를 반환합니다. DB 접속 실패는
 `503`과 공통 `DB_UNAVAILABLE` 오류로 반환하며 접속 정보나 SQL을 노출하지 않습니다.
-스키마 준비·Redis·JWT·웹소켓 상태까지 검증하는 readiness는 후속 범위입니다.
+이 경로는 DB 연결 상태만 확인합니다. migration·Redis·JWT·실제 저장은 별도 CI와 공개 릴리스 smoke로 확인합니다.
 
 ### 인증 API와 클라이언트
 
@@ -164,7 +166,7 @@ demo에서는 Secure를 사용합니다. AT는 쿠키·URL·브라우저 저장�
 같은 탭의 갱신은 single flight로 합치고 Web Locks 지원 브라우저에서는 같은 출처의 여러 탭을 직렬화합니다.
 공유 RT 쿠키의 최신 CSRF 값을 잠금 안에서 다시 읽습니다. RT를 동시에 재사용하면 세션 family가 폐기됩니다.
 Web Locks가 없는 브라우저에서는 탭 간 직렬화를 보장하지 않으며 동시 갱신 시 재로그인이 필요할 수 있습니다.
-현재 편집 화면에 로그인 UI를 연결하는 작업은 W06에서 이어 갑니다.
+편집 화면은 로그인·새로고침 시 세션 복구·로그아웃과 연결되어 있습니다.
 
 Redis에는 `syncarch:auth:rt:{sessionId}`에 사용자 ID·RT jti 해시·활성 상태·절대 만료 시각만 기록합니다.
 Lua로 현재 jti를 비교해 한 번만 교체하며, 이전 RT 재사용 시 같은 세션의 AT도 거부합니다.
@@ -246,8 +248,9 @@ DB와 Redis를 하나의 분산 트랜잭션으로 취급하지 않습니다. id
 
 callback 응답은 `no-store`, `Referrer-Policy: no-referrer`입니다. Werkzeug 로그에서 callback query를 가립니다.
 운영 React 프록시·Flask 서버·APM도 callback query/code/state와 인증 헤더·쿠키·secret을 기록하지 않도록 설정해야 합니다.
-W06은 로그인/이메일 직접 등록·수정/연결 UI와 callback 복구·오류 안내, W11은 실제 Google E2E,
-W13은 동의 화면·HTTPS·프록시 운영 설정을 이어갑니다. provider fixture를 실제 Google 로그인 성공으로 간주하지 않습니다.
+로그인/이메일 직접 등록·수정/명시 연결 UI와 callback 복구·오류 안내가 구현되어 있습니다.
+실제 Google 계정의 공개 HTTPS 왕복은 W13 운영 검증에서 별도로 기록합니다.
+provider fixture나 비밀번호 smoke를 실제 Google 로그인 성공으로 간주하지 않습니다.
 검증 구현 근거: [Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect),
 [공식 ID 토큰 검증](https://google-auth.readthedocs.io/en/latest/reference/google.oauth2.id_token.html),
 [이메일 소유권 조건](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
@@ -616,3 +619,11 @@ Markdown은 접힌 아이디어·결정 사유·원본 기능 연결·노드/통
 계속 지원합니다. DB 스키마 변경은 없습니다. 관련 API·동시성 검사는 `test_message_recovery.py`에 있습니다.
 동시에 실행하는 검사가 기존 빌드를 사용 중이면 Vite `--outDir`로 별도 빌드를 만든 뒤
 `TEST_FRONTEND_DIST`에 절대 경로를 지정할 수 있습니다. 이는 pytest의 앱 설정에만 적용됩니다.
+
+### 초대 코드와 보관 프로젝트 확인
+
+로비의 사용 중/보관된 프로젝트 목록에서 OWNER가 프로젝트를 보관·복원합니다.
+보관본은 읽을 수 있지만 초대 코드 버튼은 비활성화되며, 서버도 코드 조회·재발급·신규 가입을
+`403 PROJECT_ARCHIVED`로 거부합니다. 복원은 기존 코드를 자동 회전시키지 않습니다.
+`backend/tests/test_invite_policy.py`는 오류 계약·DB 불변·역할·중복/동시 가입을,
+`test_invite_policy_browser.py`는 독립 세 계정의 실제 React 등록·재발급·참여·보관·복원을 검사합니다.

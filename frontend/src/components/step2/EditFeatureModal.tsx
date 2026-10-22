@@ -31,9 +31,9 @@ export function EditFeatureModal({ feature, members, onSave, onClose }: Props) {
     if ('responseStatusCodes' in changed) changes.responseStatusCodes = codes;
     onSave(feature.id, changes); onClose();
   };
-  return <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+  return <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4">
     <form role="dialog" aria-modal="true" aria-label="기능 편집" onSubmit={submit}
-      className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+      className="w-full max-w-2xl max-h-full sm:max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
       <h2 className="text-sm font-bold text-white">기능 편집</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {([['name','기능명'],['domain','도메인'],['endpoint','엔드포인트 경로']] as const).map(([key,label]) =>

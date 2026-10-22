@@ -28,7 +28,7 @@ export const DeleteIdeaModal: React.FC<DeleteIdeaModalProps> = ({ id, cards, fea
   }, []);
   const disabled = isLocked || !cards.some((card) => card.id === id) || reviewed !== signature;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-4">
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="idea-delete-title"
         className="w-full max-w-md space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-5 text-slate-100"
         onKeyDown={(event) => {
