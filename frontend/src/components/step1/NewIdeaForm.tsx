@@ -51,7 +51,7 @@ export const NewIdeaForm: React.FC<NewIdeaFormProps> = ({ category, parentId, pa
   };
 
   return (
-    <div className="p-3 sm:p-4 border-b border-slate-800 bg-slate-900/40 shrink-0 overflow-y-auto max-h-[340px]">
+    <div className="p-3 sm:p-4 border-b border-slate-800 bg-slate-900/40 shrink-0 lg:overflow-y-auto lg:max-h-[340px]">
       <form onSubmit={handleCreateCard} className="space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-slate-200">{parentId ? '파생 아이디어 등록' : '신규 아이디어 & 의사결정 근거 기록'}</span>

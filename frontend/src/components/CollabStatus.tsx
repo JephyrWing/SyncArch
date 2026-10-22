@@ -25,7 +25,7 @@ export const SaveStatusBadge: React.FC<{ status: SaveStatus; version: number }> 
     >
       <Icon className={`h-3.5 w-3.5 ${status === 'saving' || status === 'loading' ? 'animate-spin' : ''}`} />
       <span>{label}</span>
-      {version > 0 && <span className="font-mono text-[10px] opacity-70">v{version}</span>}
+      {version > 0 && <span className="hidden xl:inline font-mono text-[10px] opacity-70">v{version}</span>}
     </span>
   );
 };

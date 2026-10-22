@@ -76,9 +76,9 @@ export const EditDecisionModal: React.FC<EditDecisionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm">
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="idea-edit-heading" onKeyDown={handleKeyDown}
-        className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
+        className="flex max-h-full sm:max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950 p-4">
           <h2 id="idea-edit-heading" className="flex items-center gap-2 text-sm font-bold"><Edit3 className="h-4 w-4 text-indigo-400" />아이디어 수정</h2>
           <button type="button" aria-label="수정 닫기" onClick={onClose} className="rounded p-1 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>

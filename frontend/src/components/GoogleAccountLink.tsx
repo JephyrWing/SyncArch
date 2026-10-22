@@ -39,7 +39,7 @@ export const GoogleAccountLink: React.FC<{ canNavigate?: () => boolean }> = ({ c
   if (!enabled) return null;
   return <>
     <button type="button" onClick={() => { setPassword(''); setError(''); setOpen(true); }} className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white">Google 연결</button>
-    {open && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/80 p-4">
+    {open && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/80 p-2 sm:p-4">
       <section role="dialog" aria-modal="true" aria-labelledby="google-link-title" className="w-full max-w-md space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 text-sm text-slate-100">
         <h2 id="google-link-title" className="font-bold">Google 계정 연결</h2>
         <p className="text-xs text-slate-400">현재 SyncArch 계정의 비밀번호를 확인한 뒤 연결할 Google 계정을 선택합니다. 이메일을 등록하는 것만으로 연결되지는 않습니다.</p>

@@ -6,8 +6,8 @@ export function ImportIdeasModal({ ideas, features, onImport, onClose }: Props) 
   const [selected,setSelected] = useState<Set<string>>(()=>new Set());
   const imported = new Set(features.map(f=>f.relatedStoryId).filter(Boolean));
   const chosen = ideas.filter(i=>selected.has(i.id) && !imported.has(i.id));
-  return <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-    <div role="dialog" aria-modal="true" aria-label="아이디어 가져오기" className="w-full max-w-xl max-h-[85vh] flex flex-col rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-200">
+  return <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4">
+    <div role="dialog" aria-modal="true" aria-label="아이디어 가져오기" className="w-full max-w-xl max-h-full sm:max-h-[85vh] flex flex-col rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-200">
       <h2 className="text-sm font-bold">아이디어 가져오기</h2>
       <p className="text-xs text-slate-400 mt-1 mb-3">투표 수와 펼침 상태에 관계없이 원본 아이디어를 선택하세요.</p>
       <div className="overflow-y-auto space-y-2 py-2">
