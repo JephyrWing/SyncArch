@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Layers } from 'lucide-react';
+import { RegisterScreen } from './RegisterScreen.tsx';
+import { AuthError } from '../api/auth.ts';
 import { fetchAuthOptions, loginWithPassword, startGoogleLogin } from '../api/projects.ts';
 import type { SessionUser } from '../types/index.ts';
 
@@ -9,6 +11,8 @@ interface LoginScreenProps {
 
 /** [로그인] 구글 로그인(서버 리다이렉트)과 팀원 계정 로그인. 프로젝트는 멤버에게만 보인다. */
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+  const [registering, setRegistering] = useState(false);
+  const [notice, setNotice] = useState('');
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
@@ -37,11 +41,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     setError('');
     try {
       onLogin(await loginWithPassword(loginId.trim(), password));
-    } catch {
-      setError('아이디 또는 비밀번호를 확인하세요.');
+    } catch (reason) {
+      const failure = reason as AuthError;
+      setError(failure.code === 'AUTH_UNAVAILABLE' ? '계정은 유지됩니다. 인증 서버에 연결할 수 없으니 잠시 후 다시 로그인해 주세요.'
+        : failure.code === 'DB_UNAVAILABLE' ? '데이터베이스에 연결할 수 없습니다. 잠시 후 다시 로그인해 주세요.'
+        : '아이디 또는 비밀번호를 확인하세요.');
       setBusy(false);
     }
   };
+
+  if (registering) return <RegisterScreen onBack={() => setRegistering(false)} onRegistered={(id) => {
+    setLoginId(id);
+    setPassword('');
+    setError('');
+    setNotice('회원가입이 완료되었습니다. 비밀번호를 입력해 로그인해 주세요.');
+    setRegistering(false);
+  }} />;
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-slate-950 p-4 font-sans text-slate-100">
@@ -75,6 +90,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
           </>
         )}
 
+        {notice && <p role="status" className="text-xs text-emerald-300">{notice}</p>}
         <form onSubmit={handlePassword} className="space-y-2">
           <input
             type="text"
@@ -110,6 +126,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             {error}
           </p>
         )}
+        <button type="button" disabled={busy} onClick={() => { setError(''); setNotice(''); setRegistering(true); }} className="w-full text-sm text-indigo-300 disabled:opacity-50">처음이라면 회원가입</button>
+        <p className="text-[11px] text-slate-500">처음이라면 회원가입 후 로그인하고, 상단 Google 연결에서 비밀번호를 확인해 주세요.</p>
         <p className="text-[11px] text-slate-500">팀원이라면 팀장에게 초대 코드를 받아, 로그인 후 "참가하기"에 입력하세요.</p>
       </div>
     </div>

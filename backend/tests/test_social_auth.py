@@ -136,7 +136,12 @@ def identity_rows(app):
         return [(row.user_id, row.subject, row.email) for row in db.session.scalars(select(UserIdentity))]
 
 
-def test_google_authoritative_email_links_preserving_account_and_recovers_with_existing_refresh(google_app):
+def explicit_link(fixture, client):
+    headers = bearer(login(client).json["data"]["accessToken"])
+    return callback(client, start_google(fixture, client, link_headers=headers))
+
+
+def test_explicit_google_link_preserves_account_and_existing_google_login_recovers_refresh(google_app):
     fixture, app = google_app, google_app.app
     uid, password_hash = registered_user(app, "Owner@GMAIL.com")
     original = app.test_client()
@@ -144,6 +149,7 @@ def test_google_authoritative_email_links_preserving_account_and_recovers_with_e
     project = original.post("/api/projects", json={"title": "Google 연결 전 문서"}, headers=original_headers).json["data"]
     before = original.get(f'/api/projects/{project["id"]}/document', headers=original_headers).json["data"]
     client = app.test_client()
+    assert explicit_link(fixture, client).status_code == 303
     state = start_google(fixture, client)
     response = callback(client, state)
     assert response.status_code == 303 and response.location == ORIGIN + "/auth/callback"
@@ -164,15 +170,15 @@ def test_google_authoritative_email_links_preserving_account_and_recovers_with_e
 
 
 @pytest.mark.parametrize("email,profile,verified,expected", [
-    ("owner@workspace.example", {"email": "owner@workspace.example", "hd": "workspace.example"}, True, 303),
+    ("owner@workspace.example", {"email": "owner@workspace.example", "hd": "workspace.example"}, True, 409),
     ("owner@outside.example", {"email": "owner@outside.example"}, True, 409),
     ("owner@gmail.com", {"email_verified": False}, True, 409),
-    ("owner@gmail.com", {}, False, 303),
+    ("owner@gmail.com", {}, False, 409),
     (None, {}, False, 409),
     ("other@gmail.com", {}, True, 409),
     ("owner@workspace.example", {"email": "owner@workspace.example", "hd": "another.example"}, True, 409),
 ])
-def test_auto_link_requires_google_authority_and_unique_registered_email(google_app, email, profile, verified, expected):
+def test_first_google_login_never_trusts_registered_email_even_legacy_verified(google_app, email, profile, verified, expected):
     app = google_app.app
     uid, _ = registered_user(app, email, legacy_verified=verified)
     if not verified:
@@ -192,7 +198,7 @@ def test_existing_subject_has_priority_over_email_and_disabled_account_stays_den
     app = google_app.app
     uid, _ = registered_user(app)
     client = app.test_client()
-    assert callback(client, start_google(google_app, client)).status_code == 303
+    assert explicit_link(google_app, client).status_code == 303
     google_app.profile = {"email": "changed@outside.example", "email_verified": False}
     assert callback(client, start_google(google_app, client)).status_code == 303
     assert identity_rows(app) == [(uid, "GoogleSubject_A", "changed@outside.example")]
@@ -251,6 +257,8 @@ def test_oauth_state_binding_cancellation_expiry_replay_and_duplicate_parameters
     app = google_app.app
     registered_user(app)
     client, attacker = app.test_client(), app.test_client()
+    assert explicit_link(google_app, client).status_code == 303
+    google_app.exchanges.clear()
     state = start_google(google_app, client)
     assert callback(attacker, state).status_code == 401
     assert callback(client, state).status_code == 303
@@ -311,6 +319,8 @@ def test_redis_failure_before_and_after_identity_commit_is_fail_closed(google_ap
     tokens = app.extensions["token_repository"]
     with patch.object(tokens.client, "set", side_effect=ConnectionError("private-redis-secret")):
         assert client.post("/api/auth/google/start", json={}, headers={"Origin": ORIGIN}).status_code == 503
+    assert explicit_link(google_app, client).status_code == 303
+    client.delete_cookie("syncarch_refresh", path="/api/auth/")
     state = start_google(google_app, client)
     with patch.object(tokens, "create", side_effect=AuthenticationUnavailable()):
         response = callback(client, state)
@@ -324,11 +334,13 @@ def test_identity_database_failure_rolls_back_without_new_session(google_app):
     app = google_app.app
     registered_user(app)
     client = app.test_client()
-    state = start_google(google_app, client)
+    headers = bearer(login(client).json["data"]["accessToken"])
+    original = client.get_cookie("syncarch_refresh", path="/api/auth/").value
+    state = start_google(google_app, client, link_headers=headers)
     with patch.object(identity_repository, "insert", side_effect=SQLAlchemyError("fixture-only failure")):
         response = callback(client, state)
     assert response.status_code == 503 and identity_rows(app) == []
-    assert client.get_cookie("syncarch_refresh", path="/api/auth/") is None
+    assert client.get_cookie("syncarch_refresh", path="/api/auth/").value == original
 
 
 @pytest.mark.parametrize("changes", [{"aud": "other"}, {"iss": "https://evil.example"}, {"exp": 1},
@@ -383,7 +395,7 @@ def test_direct_email_save_and_update_preserves_account_and_creates_no_challenge
     assert client.get("/api/auth/me", headers=headers).json["data"]["id"] == uid
 
 
-def test_direct_email_becomes_google_auto_link_candidate_without_local_verification(google_app):
+def test_direct_email_cannot_replace_password_confirmed_google_link(google_app):
     app = google_app.app
     client = app.test_client()
     headers = {"Origin": ORIGIN, **bearer(login(client).json["data"]["accessToken"])}
@@ -391,7 +403,9 @@ def test_direct_email_becomes_google_auto_link_candidate_without_local_verificat
     with app.app_context():
         assert db.session.get(AppUser, app.config["TEST_AUTH_USER"]).email_verified_at is None
     google_client = app.test_client()
-    assert callback(google_client, start_google(google_app, google_client)).status_code == 303
+    assert callback(google_client, start_google(google_app, google_client)).status_code == 409
+    assert identity_rows(app) == []
+    assert explicit_link(google_app, client).status_code == 303
     assert identity_rows(app)[0][0] == app.config["TEST_AUTH_USER"]
 
 
@@ -399,7 +413,7 @@ def test_direct_email_update_preserves_legacy_timestamp_and_identity(google_app)
     app = google_app.app
     uid, _ = registered_user(app, legacy_verified=True)
     client = app.test_client()
-    assert callback(client, start_google(google_app, client)).status_code == 303
+    assert explicit_link(google_app, client).status_code == 303
     before = identity_rows(app)
     with app.app_context():
         stamp = db.session.get(AppUser, uid).email_verified_at
@@ -600,9 +614,12 @@ def test_mariadb_concurrent_direct_email_claims_keep_unique_owner(auth_app):
 
 @pytest.mark.mariadb
 @pytest.mark.parametrize("same_subject", [True, False])
-def test_mariadb_concurrent_auto_link_and_case_sensitive_subjects(google_app, same_subject):
+def test_mariadb_concurrent_explicit_link_and_case_sensitive_subjects(google_app, same_subject):
     app = google_app.app
     uid, _ = registered_user(app)
+    token = login(app.test_client()).json["data"]["accessToken"]
+    with app.app_context():
+        claims = decode_token(token)
     barrier = Barrier(2)
     profiles = [{"sub": "Subject_A", "email": "owner@gmail.com", "email_verified": True},
                 {"sub": "Subject_A" if same_subject else "subject_a", "email": "owner@gmail.com", "email_verified": True}]
@@ -610,7 +627,8 @@ def test_mariadb_concurrent_auto_link_and_case_sensitive_subjects(google_app, sa
         with app.app_context():
             barrier.wait(timeout=10)
             try:
-                return service.connect_identity(db.session.session_factory, app.extensions["token_repository"], profile).id
+                return service.connect_identity(db.session.session_factory, app.extensions["token_repository"], profile,
+                    user_id=claims["sub"], session_id=claims["sid"]).id
             except IdentityConflict:
                 return "conflict"
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -621,39 +639,13 @@ def test_mariadb_concurrent_auto_link_and_case_sensitive_subjects(google_app, sa
 
 
 @pytest.mark.mariadb
-def test_mariadb_email_change_during_auto_link_rechecks_after_user_lock(google_app):
+def test_mariadb_unlinked_google_does_not_query_or_lock_email_candidates(google_app):
     app = google_app.app
-    uid, _ = registered_user(app)
-    locked, candidate_read, release = Event(), Event(), Event()
-    original = identity_repository.user_by_email
-    def candidate(session, normalized):
-        users = original(session, normalized)
-        candidate_read.set()
-        return users
-    def change_email():
-        with app.app_context(), db.session.session_factory.begin() as session:
-            user = identity_repository.user_by_id(session, uid)
-            locked.set()
-            assert release.wait(timeout=15)
-            identity_repository.set_email(user, "new@gmail.com", "new@gmail.com")
-    def connect():
-        assert locked.wait(timeout=15)
-        with app.app_context():
-            try:
-                service.connect_identity(db.session.session_factory, app.extensions["token_repository"],
-                    {"sub": "email-change-race", "email": "owner@gmail.com", "email_verified": True})
-            except GoogleLinkRequired:
-                return "denied"
-            return "linked"
-    with patch.object(identity_repository, "user_by_email", side_effect=candidate), ThreadPoolExecutor(max_workers=2) as pool:
-        change = pool.submit(change_email)
-        callback_result = pool.submit(connect)
-        try:
-            assert candidate_read.wait(timeout=15)
-        finally:
-            release.set()
-        change.result(timeout=15)
-        assert callback_result.result(timeout=15) == "denied"
+    uid, _ = registered_user(app, legacy_verified=True)
+    with patch.object(identity_repository, "user_by_email", side_effect=AssertionError("email lookup forbidden")):
+        with app.app_context(), pytest.raises(GoogleLinkRequired):
+            service.connect_identity(db.session.session_factory, app.extensions["token_repository"],
+                {"sub": "unknown-subject", "email": "owner@gmail.com", "email_verified": True})
     assert identity_rows(app) == []
 
 

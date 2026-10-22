@@ -34,6 +34,10 @@ export const fetchMe = (): Promise<SessionUser> => authClient.me();
 export const loginWithPassword = (loginId: string, password: string): Promise<SessionUser> =>
   authClient.login(loginId, password);
 
+/** [구글 로그인] 공개 가입은 토큰 발급 없이 계정만 생성한다. */
+export const registerAccount = async (body: { loginId: string; displayName: string; password: string; email?: string }): Promise<SessionUser> =>
+  (await request<{ user: SessionUser }>('POST', '/api/auth/register', body)).data!.user;
+
 export const fetchAuthOptions = async (): Promise<{ googleEnabled: boolean }> => {
   const data = (await request<{ google: { enabled: boolean } }>('GET', '/api/auth/options')).data!;
   return { googleEnabled: data.google.enabled };
@@ -42,6 +46,10 @@ export const fetchAuthOptions = async (): Promise<{ googleEnabled: boolean }> =>
 /** [구글 로그인] 서버가 만든 구글 인증 주소. 로그인 후 /auth/callback으로 돌아오며 리프레시 쿠키가 설정된다. */
 export const startGoogleLogin = async (): Promise<string> =>
   (await request<{ authorizationUrl: string }>('POST', '/api/auth/google/start', {})).data!.authorizationUrl;
+
+/** [구글 로그인] 서버가 현재 계정의 비밀번호를 확인한 뒤 명시 연결을 시작한다. */
+export const startGoogleLink = async (password: string): Promise<string> =>
+  (await request<{ authorizationUrl: string }>('POST', '/api/auth/google/link/start', { password })).data!.authorizationUrl;
 
 export const logout = (): Promise<void> => authClient.logout();
 

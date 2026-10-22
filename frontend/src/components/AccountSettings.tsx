@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { Mail, X } from 'lucide-react';
 import { ApiError } from '../api/client.ts';
+import { GoogleAccountLink } from './GoogleAccountLink.tsx';
 import { saveEmail } from '../api/projects.ts';
 
 /** [구글 로그인] 편집 화면을 유지한 채 본인 계정의 이메일을 등록하거나 수정한다. */
-export const AccountSettings: React.FC = () => {
+export const AccountSettings: React.FC<{ canNavigate?: () => boolean }> = ({ canNavigate }) => {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,6 +45,7 @@ export const AccountSettings: React.FC = () => {
   };
   return (
     <>
+      <GoogleAccountLink canNavigate={canNavigate} />
       <button type="button" onClick={() => setOpen(true)} aria-label="이메일 등록/수정" className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white">
         <Mail className="h-3.5 w-3.5" /><span className="hidden sm:inline">이메일</span>
       </button>
@@ -54,7 +56,7 @@ export const AccountSettings: React.FC = () => {
               <h2 id="email-settings-title" className="font-bold">이메일 등록/수정</h2>
               <button type="button" onClick={close} disabled={busy} aria-label="이메일 설정 닫기"><X className="h-4 w-4" /></button>
             </header>
-            <p className="mb-4 text-xs text-slate-400">본인 계정의 비밀번호로 확인한 뒤 바로 저장합니다. 같은 이메일의 Google 계정을 연결할 때 사용합니다.</p>
+            <p className="mb-4 text-xs text-slate-400">본인 계정의 비밀번호로 확인한 뒤 바로 저장합니다. 연락용 주소이며 Google 연결은 별도로 비밀번호를 확인합니다.</p>
             <form onSubmit={submit} className="space-y-3">
               <label className="block">이메일 주소
                 <input autoFocus type="email" autoComplete="email" required maxLength={254} value={email} onChange={(e) => { setEmail(e.target.value); setSaved(''); }} disabled={busy} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2" />
