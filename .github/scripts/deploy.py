@@ -38,7 +38,9 @@ def render(sha):
     for doc in docs:
         assert doc['app'] == 'dockerfile'
         assert doc['context']['git']['url'] == 'https://github.com/JephyrWing/SyncArch.git'
-        doc['context']['git']['ref'] = 'main'
+        # Cloudtype's generated workflow sends github.ref (refs/heads/main).
+        # A bare "main" is not retained as the branch in its service settings.
+        doc['context']['git']['ref'] = 'refs/heads/main'
         doc['options']['env'].append({'name': 'RELEASE_SHA', 'value': sha})
     return docs
 

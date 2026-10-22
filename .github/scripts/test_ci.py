@@ -42,7 +42,7 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual([doc['name'] for doc in docs], ['syncarch-api', 'syncarch-web'])
         for doc in docs:
             self.assertEqual(doc['app'], 'dockerfile')
-            self.assertEqual(doc['context']['git']['ref'], 'main')
+            self.assertEqual(doc['context']['git']['ref'], 'refs/heads/main')
             self.assertEqual(doc['context']['path'], '/')
             self.assertNotIn('image', doc['options'])
             self.assertEqual(doc['resources']['replicas'], 1)
