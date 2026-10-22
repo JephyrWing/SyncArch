@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import type { FeatureProgressStatus, FeatureSpec } from '../../types/index.ts';
-import { METHOD_COLORS, PRIORITY_BADGES, STATUS_BADGES } from './featureConfig.ts';
+import { methodBadge, priorityBadge, STATUS_BADGES } from './featureConfig.ts';
 import { featureCode } from '../../utils/features.ts';
 
 interface FeatureListProps {
@@ -30,8 +30,8 @@ export const FeatureList: React.FC<FeatureListProps> = ({
       <div className="divide-y divide-slate-800/80">
         {filteredFeatures.map((f) => {
           const isSelected = selectedFeatureId === f.id;
-          const mColor = METHOD_COLORS[f.method];
-          const pColor = PRIORITY_BADGES[f.priority];
+          const mColor = methodBadge(f.method);
+          const pColor = priorityBadge(f.priority);
           const sColor = STATUS_BADGES[f.status];
 
           return (
@@ -48,10 +48,10 @@ export const FeatureList: React.FC<FeatureListProps> = ({
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px] font-mono font-bold text-slate-400">{featureCode(f)}</span>
                   <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${mColor.bg} ${mColor.text} ${mColor.border}`}>
-                    {f.method}
+                    {f.method ?? '미지정'}
                   </span>
                   <span className={`text-[9px] px-1 py-0.2 rounded border ${pColor.bg} ${pColor.text} ${pColor.border}`}>
-                    {f.priority}
+                    {f.priority ?? '미지정'}
                   </span>
                   <span className="text-[10px] font-medium text-slate-400">[{f.domain}]</span>
                 </div>

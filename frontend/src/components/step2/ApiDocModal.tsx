@@ -112,7 +112,7 @@ export const ApiDocModal: React.FC<ApiDocModalProps> = ({ open, features, onClos
         {/* [기능 명세] 하단 버튼 */}
         <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
           <div className="text-xs text-slate-400 font-mono">
-            총 {features.length}개 엔드포인트 명세 반영
+            {apiDocTab === 'markdown' ? `총 ${features.length}개 기능 명세 반영` : `총 ${features.filter((f) => f.method && f.endpoint).length}개 엔드포인트 반영 · 메서드/경로 미지정 ${features.filter((f) => !f.method || !f.endpoint).length}개 제외`}
           </div>
 
           <div className="flex items-center gap-2">

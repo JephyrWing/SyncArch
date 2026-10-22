@@ -331,7 +331,7 @@ export const ArchCanvas: React.FC<ArchCanvasProps> = ({
                     {node.category}
                   </span>
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-slate-400 font-mono">{node.assignedTeam}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{node.assignedTeam ?? '미지정'}</span>
                     {!isLocked && (
                       <button
                         onMouseDown={(e) => e.stopPropagation()}

@@ -15,6 +15,10 @@ export const PRIORITY_BADGES: Record<PriorityLevel, { text: string; bg: string; 
   P2: { text: 'text-slate-300 font-medium', bg: 'bg-slate-800', border: 'border-slate-700' },
 };
 
+const UNASSIGNED_BADGE = { text: 'text-slate-400', bg: 'bg-slate-800', border: 'border-slate-700' };
+export const methodBadge = (method?: HttpMethod) => method ? METHOD_COLORS[method] : UNASSIGNED_BADGE;
+export const priorityBadge = (priority?: PriorityLevel) => priority ? PRIORITY_BADGES[priority] : UNASSIGNED_BADGE;
+
 export const STATUS_BADGES: Record<FeatureProgressStatus, { label: string; text: string; bg: string; border: string }> = {
   PLANNED: { label: FEATURE_STATUS_LABELS.PLANNED, text: 'text-slate-300', bg: 'bg-slate-800', border: 'border-slate-700' },
   IN_PROGRESS: { label: FEATURE_STATUS_LABELS.IN_PROGRESS, text: 'text-sky-300 font-semibold', bg: 'bg-sky-950/80', border: 'border-sky-600/40' },

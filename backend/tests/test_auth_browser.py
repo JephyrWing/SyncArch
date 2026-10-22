@@ -1,5 +1,6 @@
 """TC-AUTH-01/03/04: 실제 브라우저·Flask·SQL DB·Redis 인증 경계입니다."""
 from pathlib import Path
+import subprocess
 from threading import Thread
 
 import pytest
@@ -19,10 +20,12 @@ class QuietHandler(WSGIRequestHandler):
 
 
 @pytest.fixture
-def browser_session(auth_app):
-    module = ROOT / ".local/auth-client.js"
-    if not module.is_file():
-        raise RuntimeError("먼저 인증 클라이언트를 esbuild로 .local/auth-client.js에 빌드하세요.")
+def browser_session(auth_app, tmp_path):
+    # 테스트 소스는 .local의 수동 생성 번들에 의존하지 않는다. 실제 인증 클라이언트를 임시 디렉터리에 빌드한다.
+    module = tmp_path / "auth-client.js"
+    subprocess.run(["node", str(ROOT / "frontend/node_modules/esbuild/bin/esbuild"),
+                    str(ROOT / "frontend/src/api/auth.ts"), "--bundle", "--format=esm", "--platform=browser",
+                    f"--outfile={module}"], check=True, capture_output=True)
     @auth_app.get("/__auth_client.js")
     def auth_module():
         return send_file(module, mimetype="text/javascript")

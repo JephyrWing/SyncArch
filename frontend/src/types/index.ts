@@ -57,9 +57,9 @@ export interface FeatureSpec {
   displayCode?: string;
   domain: string;
   name: string;
-  priority: PriorityLevel;
+  priority?: PriorityLevel;
   assignee: string;
-  method: HttpMethod;
+  method?: HttpMethod;
   endpoint: string;
   requestFields: string;
   responseFields: string;
@@ -205,11 +205,15 @@ export interface ProjectSummary {
   role: ProjectRole;
 }
 
+// 서버에서 허용하는 최소 항목과 화면의 표시 기본값을 구분한다.
+export type DocumentFeature = Pick<FeatureSpec, 'id' | 'name'> & Partial<Omit<FeatureSpec, 'id' | 'name'>>;
+export type DocumentNode = Pick<ArchNode, 'id' | 'name' | 'category' | 'x' | 'y'> & Partial<Omit<ArchNode, 'id' | 'name' | 'category' | 'x' | 'y'>>;
+
 export interface DocumentPayload {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   ideas: IdeaCard[];
-  features: FeatureSpec[];
-  nodes: ArchNode[];
+  features: DocumentFeature[];
+  nodes: DocumentNode[];
   connections: ArchConnection[];
   tables: ErdTable[];
   stepLocks?: Record<StepNumber, boolean>;
