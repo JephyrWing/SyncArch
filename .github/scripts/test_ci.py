@@ -43,6 +43,7 @@ class ReleaseGateTests(unittest.TestCase):
         for doc in docs:
             self.assertEqual(doc['app'], 'dockerfile')
             self.assertEqual(doc['context']['git']['ref'], 'a'*40)
+            self.assertEqual(doc['context']['path'], '/')
             self.assertNotIn('image', doc['options'])
             self.assertEqual(doc['resources']['replicas'], 1)
             public_revision = doc['options']['env'][-1]
