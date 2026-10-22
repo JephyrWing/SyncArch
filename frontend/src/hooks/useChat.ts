@@ -15,6 +15,7 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
   const [loaded, setLoaded] = useState(false);
   const stateRef = useRef<ChatState>({ messages: [] });
   const generationRef = useRef(0);
+  const pendingRef = useRef<{ projectId: string; body: string; clientId: string } | null>(null);
 
   const commit = (next: ChatState) => {
     stateRef.current = next;
@@ -65,8 +66,13 @@ export const useChat = (projectId: string | null, access: ProjectAccess) => {
     if (!projectId) return;
     access.check();
     const generation = generationRef.current;
+    // [채팅] 실패해서 같은 내용을 다시 보내면 같은 키를 쓴다. 응답만 잃은 경우 서버가 두 번 저장하지 않는다.
+    const pending = pendingRef.current;
+    const clientId = pending && pending.projectId === projectId && pending.body === body ? pending.clientId : crypto.randomUUID();
+    pendingRef.current = { projectId, body, clientId };
     try {
-      const sent = await sendMessage(projectId, body);
+      const sent = await sendMessage(projectId, body, clientId);
+      if (pendingRef.current?.clientId === clientId) pendingRef.current = null;
       if (generation === generationRef.current && !access.isStopped()) commit(applySent(stateRef.current, sent));
     } catch (err) {
       if (generation === generationRef.current && isAccessError(err)) access.stop(err);

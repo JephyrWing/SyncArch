@@ -57,14 +57,17 @@ def leave(project_id):
 
 @collaboration.get("/<project_id>/messages")
 def messages(project_id):
+    since, after_id = collab_schema.cursor_input(request.args.get("since"), request.args.get("after"))
     return jsonify(data=message_service.list_messages(db.session.session_factory, g.actor_id, identifier(project_id),
-                                                      collab_schema.since_input(request.args.get("since"))))
+                                                      since, after_id))
 
 
 @collaboration.post("/<project_id>/messages")
 def post_message(project_id):
-    return jsonify(data=message_service.post_message(db.session.session_factory, g.actor_id, identifier(project_id),
-                                                     collab_schema.message_input(request.get_json()))), 201
+    body, client_id = collab_schema.message_input(request.get_json())
+    message, created = message_service.post_message(db.session.session_factory, g.actor_id, identifier(project_id),
+                                                    body, client_id)
+    return jsonify(data=message), 201 if created else 200
 
 
 @collaboration.get("/<project_id>/api-spec.xlsx")

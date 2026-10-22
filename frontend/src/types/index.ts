@@ -234,6 +234,9 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+// [채팅] 다음 조회 기준. 마지막으로 받은 메시지의 시각과 id다.
+export type ChatCursor = Pick<ChatMessage, 'createdAt' | 'id'>;
+
 // [협업 상태] POST /api/projects/{id}/presence 응답 항목
 export interface PresenceEntry {
   userId: string;

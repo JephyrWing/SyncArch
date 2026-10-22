@@ -16,9 +16,18 @@ test('a message I send does not make the next poll skip a teammate message sent 
   let state = applyPolled({ messages: [] }, [message('initial', '2026-10-21T01:00:00.000Z')]);
   // [채팅] 팀원이 01:00:01에 보냈고(아직 조회 전), 내가 01:00:02에 보냈다.
   state = applySent(state, message('mine', '2026-10-21T01:00:02.000Z'));
-  assert.equal(state.cursor, '2026-10-21T01:00:00.000Z');
+  assert.deepEqual(state.cursor, { createdAt: '2026-10-21T01:00:00.000Z', id: 'initial' });
   const server = [message('initial', '2026-10-21T01:00:00.000Z'), message('teammate', '2026-10-21T01:00:01.000Z'), message('mine', '2026-10-21T01:00:02.000Z')];
-  state = applyPolled(state, server.filter((m) => m.createdAt >= state.cursor!));
+  state = applyPolled(state, server.filter((m) => m.createdAt > state.cursor!.createdAt));
   assert.deepEqual(state.messages.map((m) => m.id), ['initial', 'teammate', 'mine']);
-  assert.equal(state.cursor, '2026-10-21T01:00:02.000Z');
+  assert.deepEqual(state.cursor, { createdAt: '2026-10-21T01:00:02.000Z', id: 'mine' });
+});
+
+test('same-time messages keep server (time, id) order and the cursor moves to the last id', () => {
+  // [채팅] 서버는 소수 0인 시각을 '...:00Z'로 보낸다. 문자열 비교로는 '...:00.5Z'보다 뒤로 가므로 숫자로 비교해야 한다.
+  const state = applyPolled({ messages: [] }, [message('b', '2026-10-21T01:00:00Z'), message('a', '2026-10-21T01:00:00.500000Z')]);
+  const merged = mergeMessages(state.messages, [message('a2', '2026-10-21T01:00:00Z')]);
+  assert.deepEqual(merged.map((m) => m.id), ['a2', 'b', 'a']);
+  assert.deepEqual(state.cursor, { createdAt: '2026-10-21T01:00:00.500000Z', id: 'a' });
+  assert.deepEqual(applyPolled(state, []).cursor, state.cursor, 'an empty poll keeps the cursor');
 });

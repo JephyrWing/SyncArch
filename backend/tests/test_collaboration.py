@@ -8,7 +8,7 @@ from unittest.mock import patch
 from openpyxl import load_workbook
 
 from test_auth import auth_app  # noqa: F401
-from test_projects import create, users  # noqa: F401
+from test_projects import add_editor, create, users  # noqa: F401
 
 
 def save(users, project_id, base_version, payload, title="설계 프로젝트"):
@@ -101,6 +101,75 @@ def test_chat_is_shared_by_members_and_supports_incremental_polling(users):
     assert owner.get(f"/api/projects/{project_id}/messages", query_string={"since": "어제"}, headers=oh).status_code == 400
     owner.patch(f"/api/projects/{project_id}/archive", json={"archived": True}, headers=oh)
     assert editor.post(f"/api/projects/{project_id}/messages", json={"body": "보관 후"}, headers=eh).status_code == 403
+
+
+def test_chat_cursor_reads_past_more_than_a_page_of_same_time_messages(users):
+    from datetime import datetime
+    from app.extensions import db
+    from app.models import ProjectMessage
+    owner, oh = users["owner"], users["owner_headers"]
+    project_id = create(users)["id"]
+    same = datetime(2026, 10, 22, 1, 0, 0, 123456)
+    with users["app"].app_context():
+        db.session.add_all(ProjectMessage(project_id=project_id, user_id=users["owner_id"], body=f"m{i}", created_at=same)
+                           for i in range(205))
+        db.session.add(ProjectMessage(project_id=project_id, user_id=users["owner_id"], body="later",
+                                      created_at=datetime(2026, 10, 22, 1, 0, 1)))
+        db.session.commit()
+
+    def page(since, after=None):
+        query = {"since": since} | ({"after": after} if after else {})
+        response = owner.get(f"/api/projects/{project_id}/messages", query_string=query, headers=oh)
+        assert response.status_code == 200
+        return response.json["data"]
+
+    first = page("2026-10-22T01:00:00Z")
+    assert len(first) == 200 and len({m["createdAt"] for m in first}) == 1
+    assert [m["id"] for m in first] == sorted(m["id"] for m in first)
+    # 예전 방식(since만)은 같은 시각 200개를 다시 받아 멈추지만, (시각, id) 커서는 다음 메시지로 넘어갑니다.
+    assert page(first[-1]["createdAt"]) == first
+    second = page(first[-1]["createdAt"], first[-1]["id"])
+    assert [m["body"] for m in second][-1] == "later" and len(second) == 6
+    assert {m["id"] for m in first}.isdisjoint(m["id"] for m in second)
+    assert page(second[-1]["createdAt"], second[-1]["id"]) == []
+
+    assert owner.get(f"/api/projects/{project_id}/messages", query_string={"after": first[0]["id"]},
+                     headers=oh).status_code == 400
+    assert owner.get(f"/api/projects/{project_id}/messages", query_string={"since": first[0]["createdAt"], "after": "x"},
+                     headers=oh).status_code == 400
+
+
+def test_resending_a_chat_message_with_the_same_client_id_saves_it_once(users):
+    owner, editor = users["owner"], users["editor"]
+    oh, eh = users["owner_headers"], users["editor_headers"]
+    project_id = create(users)["id"]
+    add_editor(users, project_id)
+    url = f"/api/projects/{project_id}/messages"
+    key = str(uuid.uuid4())
+
+    first = owner.post(url, json={"body": "한 번만", "clientId": key}, headers=oh)
+    # 응답을 잃은 브라우저가 같은 키로 다시 보내면 새로 만들지 않고 처음 메시지를 돌려줍니다.
+    again = owner.post(url, json={"body": " 한 번만 ", "clientId": key}, headers=oh)
+    assert first.status_code == 201 and again.status_code == 200 and again.json["data"] == first.json["data"]
+    # 키는 보낸 사람마다 따로라 다른 멤버가 같은 키를 써도 섞이지 않습니다.
+    assert editor.post(url, json={"body": "한 번만", "clientId": key}, headers=eh).status_code == 201
+    reused = owner.post(url, json={"body": "다른 내용", "clientId": key}, headers=oh)
+    assert reused.status_code == 409 and reused.json["error"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert owner.post(url, json={"body": "키 없음"}, headers=oh).status_code == 201
+    assert owner.post(url, json={"body": "키 없음"}, headers=oh).status_code == 201
+    assert owner.post(url, json={"body": "x", "clientId": "not-a-uuid"}, headers=oh).status_code == 400
+    bodies = [m["body"] for m in owner.get(url, headers=oh).json["data"]]
+    assert bodies == ["한 번만", "한 번만", "키 없음", "키 없음"]
+
+    # 같은 키 두 요청이 동시에 확인을 통과한 경우: 늦은 쪽은 고유 인덱스에 막히고 먼저 저장된 메시지를 받습니다.
+    from app.repositories import message_repository
+    real = message_repository.find_by_client_id
+    calls = []
+    with patch.object(message_repository, "find_by_client_id",
+                      lambda *args: calls.append(1) or (None if len(calls) == 1 else real(*args))):
+        raced = owner.post(url, json={"body": "한 번만", "clientId": key}, headers=oh)
+    assert raced.status_code == 200 and raced.json["data"] == first.json["data"] and len(calls) == 2
+    assert len(owner.get(url, headers=oh).json["data"]) == 4
 
 
 def test_presence_lists_members_with_their_step_and_expires(users, monkeypatch):
