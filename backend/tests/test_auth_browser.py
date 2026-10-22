@@ -23,9 +23,13 @@ class QuietHandler(WSGIRequestHandler):
 def browser_session(auth_app, tmp_path):
     # 테스트 소스는 .local의 수동 생성 번들에 의존하지 않는다. 실제 인증 클라이언트를 임시 디렉터리에 빌드한다.
     module = tmp_path / "auth-client.js"
-    subprocess.run(["node", str(ROOT / "frontend/node_modules/esbuild/bin/esbuild"),
-                    str(ROOT / "frontend/src/api/auth.ts"), "--bundle", "--format=esm", "--platform=browser",
-                    f"--outfile={module}"], check=True, capture_output=True)
+    # npm installs a native ELF binary on Linux and a JS launcher on Windows.
+    # Use the supported JS API on both systems instead of passing that binary to Node.
+    subprocess.run(["node", "--input-type=module", "-e",
+                    "import esbuild from 'esbuild'; esbuild.buildSync({entryPoints:[process.argv[1]],"
+                    "bundle:true,format:'esm',platform:'browser',outfile:process.argv[2]})",
+                    str(ROOT / "frontend/src/api/auth.ts"), str(module)],
+                   cwd=ROOT / "frontend", check=True, capture_output=True)
     @auth_app.get("/__auth_client.js")
     def auth_module():
         return send_file(module, mimetype="text/javascript")
