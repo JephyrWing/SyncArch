@@ -80,7 +80,7 @@ Secure 쿠키는 APP_ENV=demo에서 설정하고 OAuth redirect URI는 고정된
 배포 주소가 확정되기 전 세 주소 변수는 임의로 채우지 않는다.
 demo는 필수 키/호스트/origin이 빠지면 시작을 거부한다.
 Google Console에도 동일한 redirect URI를 등록해야 한다.
-처음 생성하는 서비스의 도메인은 Cloudtype frontend 서비스 연결 화면에서 확보한다.
+처음 생성하는 서비스의 도메인은 Cloudtype syncarch-web 서비스 연결 화면에서 확보한다.
 초기 도메인 확보·환경변수 입력이 끝나기 전 main 릴리스를 실행하지 않는다.
 
 ## GitHub와 Cloudtype 연결 (최초 1회)
