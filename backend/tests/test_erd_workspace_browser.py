@@ -263,11 +263,13 @@ def test_safe_idea_branch_and_node_deletion_preserve_unrelated_data(browser_sess
         page, setup, url = erd_workspace(context, origin)
         before = api(setup, "GET", url)["data"]
         page.get_by_role("button", name="아이디어 보드", exact=False).first.click()
-        page.once("dialog", lambda dialog: dialog.dismiss())
         page.get_by_title("삭제", exact=True).first.click()
+        impact = page.get_by_role("dialog", name="아이디어 삭제 영향 확인")
+        expect(impact).to_contain_text("하위 1개")
+        impact.get_by_role("button", name="취소", exact=True).click()
         assert api(setup, "GET", url)["data"] == before
-        page.once("dialog", lambda dialog: dialog.accept())
-        stored = saved(page, lambda: page.get_by_title("삭제", exact=True).first.click())
+        page.get_by_title("삭제", exact=True).first.click()
+        stored = saved(page, lambda: impact.get_by_role("button", name="하위 포함 삭제", exact=True).click())
         assert [idea["title"] for idea in stored["payload"]["ideas"]] == ["W09 유지"]
         assert not stored["payload"]["features"][0].get("relatedStoryId")
         assert stored["payload"]["tables"] == before["payload"]["tables"]
