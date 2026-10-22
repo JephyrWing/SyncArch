@@ -435,8 +435,14 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   };
 
   const handleUpdateCard = (id: string, updated: Partial<IdeaCard>) => {
-    // [아이디어 보드] 결정을 바꾼 사람은 서버가 로그인 사용자 ID로 기록한다. 화면이 고른 이름은 쓰지 않는다.
-    const fields = updated.decidedBy ? { ...updated, decidedBy: me.id } : updated;
+    // [아이디어 보드] 결정(상태·사유)을 바꾼 경우에만 로그인 사용자를 결정자로 기록한다. 그 밖에는 기존 결정자를 그대로 둔다.
+    // 서버는 결정이 그대로인데 결정자가 바뀌면 거절한다(document_validation).
+    const card = currentProject.ideas.find((c) => c.id === id);
+    const { decidedBy: _picked, ...rest } = updated;
+    const decisionChanged = !!card && (
+      ('decisionStatus' in updated && updated.decisionStatus !== card.decisionStatus) ||
+      ('decisionReason' in updated && updated.decisionReason !== card.decisionReason));
+    const fields = decisionChanged ? { ...rest, decidedBy: me.id } : rest;
     updateCurrentProject({
       ideas: currentProject.ideas.map((c) => (c.id === id ? { ...c, ...fields } : c)),
     });

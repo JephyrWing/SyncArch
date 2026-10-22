@@ -134,18 +134,8 @@ export const NewIdeaForm: React.FC<NewIdeaFormProps> = ({ teamMembers, isLocked,
 
           <div>
             <label className="text-[10px] font-semibold text-slate-300">작성자</label>
-            <select
-              disabled={isLocked}
-              value={selectedAuthor}
-              onChange={(e) => setSelectedAuthor(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none mt-1"
-            >
-              {teamMembers.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name} ({m.badge})
-                </option>
-              ))}
-            </select>
+            {/* [아이디어 보드] 서버는 로그인한 본인만 작성자·결정자로 기록한다(계약 v2). */}
+            <p className="mt-1 px-2 py-1 text-xs text-slate-400">로그인한 본인으로 기록됩니다</p>
           </div>
         </div>
 

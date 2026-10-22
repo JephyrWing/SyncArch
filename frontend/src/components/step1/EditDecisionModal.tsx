@@ -117,13 +117,8 @@ export const EditDecisionModal: React.FC<EditDecisionModalProps> = ({
 
             <div>
               <label className="text-xs font-semibold text-slate-300">의사결정자 (Decided By)</label>
-              <input
-                type="text"
-                value={editDecidedBy}
-                onChange={(e) => setEditDecidedBy(e.target.value)}
-                placeholder="예: 현우 (Tech Lead) / 팀 합의"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none mt-1"
-              />
+              {/* [아이디어 보드] 결정 상태나 사유를 바꾸면 서버가 로그인한 본인을 결정자로 기록한다(계약 v2). */}
+              <p className="mt-1 px-2.5 py-1.5 text-xs text-slate-400">결정을 바꾸면 로그인한 본인으로 기록됩니다</p>
             </div>
           </div>
 
