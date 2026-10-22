@@ -1,5 +1,5 @@
 """Common JSON errors; exception details must never reach clients or logs."""
-from flask import jsonify
+from flask import jsonify, redirect, request
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import HTTPException
 
@@ -113,8 +113,21 @@ class UserNotFound(ApplicationError):
 
 
 def register_error_handlers(app):
+    def google_callback_error(code):
+        # Browser navigation must leave the consumed OAuth code/state URL even on failure.
+        # JSON API consumers keep their existing status/error contract.
+        if (request.endpoint == 'social_auth.callback'
+                and request.accept_mimetypes['text/html'] > request.accept_mimetypes['application/json']):
+            response = redirect(app.config['AUTH_FRONTEND_ORIGIN'] + '/auth/callback?error=' + code, code=303)
+            response.delete_cookie('syncarch_google_binding', path='/api/auth/google/')
+            response.headers['Cache-Control'] = 'no-store'
+            return response
+        return None
+
     @app.errorhandler(ApplicationError)
     def application_error(error):
+        redirected = google_callback_error(error.code)
+        if redirected is not None: return redirected
         return jsonify(error={"code": error.code, "message": error.message,
                               **getattr(error, "details", {})}), error.status
 
@@ -126,6 +139,8 @@ def register_error_handlers(app):
             413: "DOCUMENT_TOO_LARGE", 422: "VALIDATION_FAILED",
             429: "TOO_MANY_REQUESTS", 503: "DB_UNAVAILABLE",
         }
+        redirected = google_callback_error(codes.get(error.code, 'INTERNAL_ERROR'))
+        if redirected is not None: return redirected
         response = error.get_response()
         response.data = app.json.dumps({"error": {
             "code": codes.get(error.code, "INTERNAL_ERROR" if error.code >= 500 else "BAD_REQUEST"),
@@ -138,8 +153,12 @@ def register_error_handlers(app):
     def database_error(error):
         db.session.rollback()
         app.logger.error("Database operation failed (%s)", type(error).__name__)
+        redirected = google_callback_error('DB_UNAVAILABLE')
+        if redirected is not None: return redirected
         return jsonify(error={"code": "DB_UNAVAILABLE", "message": "데이터베이스 작업에 실패했습니다."}), 503
 
     @app.errorhandler(500)
     def server_error(error):
+        redirected = google_callback_error('INTERNAL_ERROR')
+        if redirected is not None: return redirected
         return jsonify(error={"code": "INTERNAL_ERROR", "message": "서버 내부 오류가 발생했습니다."}), 500

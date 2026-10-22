@@ -583,3 +583,32 @@ Vite 검사는 별도 임시 포트에서 `/api` 프록시의 로그인/쿠키·
 컬럼 속성·자료형 매개변수와 PK 전환도 검사하며, 테이블당 PK 컬럼 하나라는 서버 계약을 화면에서도 확인합니다.
 위 공통 runner에 포함되며 SQLite에서는 테스트별 파일 DB를 사용해 HTTP 스레드의 연결을 분리합니다.
 MariaDB 검증은 지정한 격리 테스트 DB를 사용합니다. 다른 DB 버전의 결과는 11.4 검증과 구분해 기록합니다.
+
+### W10 저장본 내보내기와 W11 복구 검증
+
+상단 **내보내기 (SQL / MD)**는 서버에서 문서 하나를 다시 조회해 저장 버전과 생성 시각을
+고정합니다. 열린 창에서 SQL/Markdown을 바꿔도 같은 저장본을 사용합니다. 저장 중·실패한
+초안은 다운로드하지 않으며 기존 **내 변경 백업(JSON)**으로 보존합니다.
+Markdown은 접힌 아이디어·결정 사유·원본 기능 연결·노드/통신선 속성과 정규화된 컬럼
+길이·정밀도를 포함합니다. MariaDB DDL은 식별자를 인용하고 자료형의 상충·잘못된 FK를
+명시 오류로 알립니다. 앱 DB에 생성 SQL을 실행하는 기능은 제공하지 않습니다.
+
+`test_exports_browser.py`는 실제 저장→재조회→다운로드한 DDL을 앱 DB와 다른 임시 DB에
+적용해 information_schema/PK/FK를 비교합니다. `test_integration_recovery.py`는 5개
+독립 인증 API 세션의 100노드/100선 조회·CAS 저장·ETag 측정과 실제 mariadb-dump→별도 DB
+복원→새 Flask의 문서/채팅/인증/멱등 결과를 검사합니다. Windows MariaDB 11.4 도구 위치는
+`TEST_MARIADB_BIN`으로 지정할 수 있으며 기본값은 `.local/w08-tools/mariadb-11.4.13-winx64/bin`입니다.
+운영 DB에는 연결하지 않고 공통 runner가 만든 `syncarch_test_<UUID>` DB만 사용합니다.
+`test_integration_recovery_browser.py`는 두 제품 화면에서 DB 커밋 후 응답 유실과 동일 본문/키
+재시도·단일 활동 기록을 확인합니다. 산출물과 측정 JSON은 `.local`에 남습니다.
+선택 검사는 공통 runner에 `PYTEST_ADDOPTS='-k "exports_browser or integration_recovery"'`를
+지정합니다. 전체 검사는 이 환경변수를 지운 뒤 실행합니다. Google provider fixture와
+실제 Google 동의·공개 HTTPS/배포 검증 결과는 구분합니다.
+
+채팅은 `since` 시각과 `afterId` UUID로 같은 시각의 200개 초과 메시지도 이어 읽습니다.
+제품은 한 주기에 최대 5페이지를 처리한 뒤 다음 폴링에서 계속합니다. 새 전송의 `messageId`는
+기존 메시지 PK로 쓰며, 응답 유실 후 같은 ID/본문을 다시 보내면 최초 메시지를 반환합니다.
+다른 작성자·프로젝트·본문으로 같은 ID를 재사용하면 409입니다. ID 없는 기존 API 호출은
+계속 지원합니다. DB 스키마 변경은 없습니다. 관련 API·동시성 검사는 `test_message_recovery.py`에 있습니다.
+동시에 실행하는 검사가 기존 빌드를 사용 중이면 Vite `--outDir`로 별도 빌드를 만든 뒤
+`TEST_FRONTEND_DIST`에 절대 경로를 지정할 수 있습니다. 이는 pytest의 앱 설정에만 적용됩니다.

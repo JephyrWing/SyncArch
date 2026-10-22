@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Download, 
   Copy, 
@@ -11,21 +11,19 @@ import {
   ExternalLink,
   Database
 } from 'lucide-react';
-import type { ErdTable, IdeaCard, FeatureSpec, ArchNode, ArchConnection, SqlDialect, ExportSettings } from '../types/index.ts';
+import type { SqlDialect, ExportSettings } from '../types/index.ts';
 import { generateSql } from '../utils/sqlGenerator.ts';
 import { generateMarkdownSpec } from '../utils/markdownGenerator.ts';
+import { fetchDocument } from '../api/projects.ts';
+import { toProjectData } from '../adapters/projectAdapter.ts';
+import type { ProjectData } from '../types/index.ts';
 
 interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectTitle: string;
-  projectSummary: string;
-  ideas: IdeaCard[];
-  features: FeatureSpec[];
-  nodes: ArchNode[];
-  connections: ArchConnection[];
-  tables: ErdTable[];
   defaultDbms?: SqlDialect;
+  projectId: string;
+  exportAllowed: boolean;
 }
 
 const DIALECT_OPTIONS: { id: SqlDialect; label: string; badge: string; desc: string }[] = [
@@ -41,17 +39,28 @@ const DIALECT_OPTIONS: { id: SqlDialect; label: string; badge: string; desc: str
 export const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
   onClose,
-  projectTitle,
-  projectSummary,
-  ideas,
-  features,
-  nodes,
-  connections,
-  tables,
   defaultDbms = 'postgres',
+  projectId,
+  exportAllowed,
 }) => {
   const [activeTab, setActiveTab] = useState<'sql' | 'markdown'>('sql');
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const [snapshot, setSnapshot] = useState<{ project: ProjectData; version: number; generatedAt: string } | null>(null);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => {
+    let alive = true;
+    setSnapshot(null);
+    setLoadError('');
+    setCopyError('');
+    setCopied(false);
+    if (isOpen && exportAllowed) {
+      fetchDocument(projectId).then((view) => {
+        if (alive && view) setSnapshot({ project: toProjectData(view, 1), version: view.version, generatedAt: new Date().toISOString() });
+      }).catch(() => { if (alive) setLoadError('저장본을 불러오지 못했습니다. 닫은 뒤 다시 시도하세요.'); });
+    }
+    return () => { alive = false; };
+  }, [isOpen, projectId, exportAllowed]);
 
   // [명세서 생성] SQL 내보내기 설정
   const [settings, setSettings] = useState<ExportSettings>({
@@ -64,26 +73,29 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   if (!isOpen) return null;
 
-  const sqlContent = generateSql(tables, settings);
-  const markdownContent = generateMarkdownSpec(
-    projectTitle,
-    projectSummary,
-    ideas,
-    features,
-    nodes,
-    connections,
-    tables
-  );
+  let sqlContent = '', markdownContent = '', sqlError = '';
+  if (snapshot) {
+    const p = snapshot.project;
+    try { sqlContent = generateSql(p.tables, settings, snapshot); }
+    catch (error) { sqlError = error instanceof Error ? error.message : 'SQL 생성에 실패했습니다.'; }
+    markdownContent = generateMarkdownSpec(p.title, p.summary, p.ideas, p.features, p.nodes, p.connections, p.tables, snapshot);
+  }
 
   const currentContent = activeTab === 'sql' ? sqlContent : markdownContent;
+  const error = !exportAllowed ? '저장이 완료된 뒤 내보내기를 다시 열어 주세요. 미저장 초안은 내 변경 백업을 사용하세요.' : loadError || (activeTab === 'sql' ? sqlError : '');
+  const ready = Boolean(snapshot && !error);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(currentContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!ready) return;
+    navigator.clipboard.writeText(currentContent).then(() => {
+      setCopyError('');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => setCopyError('클립보드에 복사하지 못했습니다. 파일 다운로드를 사용하세요.'));
   };
 
   const handleDownload = () => {
+    if (!ready) return;
     let filename = `schema-${settings.dialect}.sql`;
     let mime = 'text/plain';
 
@@ -152,6 +164,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
           <button
             onClick={onClose}
+            aria-label="내보내기 닫기"
             className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
           >
             <X className="w-4 h-4" />
@@ -228,6 +241,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* [명세서 생성] 코드 보기 영역 */}
         <div className="flex-1 overflow-auto p-4 bg-slate-950 font-mono text-xs text-slate-200">
+          {copyError && <p role="alert">{copyError}</p>}
+          {error ? <p role="alert">{error}</p> : !snapshot ? <p role="status">저장본을 불러오는 중…</p> : <p className="mb-3 text-slate-400">저장 버전 {snapshot.version} · 생성 시각 {snapshot.generatedAt}</p>}
           <pre className="whitespace-pre-wrap leading-relaxed select-text font-mono">
             {currentContent}
           </pre>
@@ -250,6 +265,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
+              disabled={!ready}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -258,6 +274,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
             <button
               onClick={handleDownload}
+              disabled={!ready}
               className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-sky-600/20 transition-all"
             >
               <Download className="w-3.5 h-3.5" />

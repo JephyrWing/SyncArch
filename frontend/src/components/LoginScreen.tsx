@@ -7,17 +7,18 @@ import type { SessionUser } from '../types/index.ts';
 
 interface LoginScreenProps {
   onLogin: (user: SessionUser) => void;
+  initialError?: string;
 }
 
 /** [로그인] 구글 로그인(서버 리다이렉트)과 팀원 계정 로그인. 프로젝트는 멤버에게만 보인다. */
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, initialError = '' }) => {
   const [registering, setRegistering] = useState(false);
   const [notice, setNotice] = useState('');
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
 
   useEffect(() => {
     fetchAuthOptions().then((options) => setGoogleEnabled(options.googleEnabled)).catch(() => setGoogleEnabled(false));

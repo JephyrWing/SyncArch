@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 
 import pytest
 from sqlalchemy import MetaData, event
@@ -38,6 +39,8 @@ def app():
         raise ValueError("Tests require a disposable syncarch_test_<UUID hex> database")
     application = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": uri,
                               "SQLALCHEMY_ENGINE_OPTIONS": {}})
+    if os.getenv('TEST_FRONTEND_DIST'):
+        application.config['FRONTEND_DIST'] = Path(os.environ['TEST_FRONTEND_DIST']).resolve()
     with application.app_context():
         if url.get_backend_name() == "sqlite":
             @event.listens_for(db.engine, "connect")

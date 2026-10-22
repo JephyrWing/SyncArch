@@ -1,5 +1,5 @@
 import type { ErdTable, ExportSettings, SqlDialect } from '../types/index.ts';
-import { columnTypeExpression, normalizeTypeExpression } from './mariadbTypes.ts';
+import { columnTypeExpression, normalizeTypeExpression, mariaDbTypeError } from './mariadbTypes.ts';
 
 /**
  * [SQL 생성] FK 참조를 기준으로 테이블을 위상 정렬한다.
@@ -125,8 +125,32 @@ function mapDataType(type: string, dialect: SqlDialect): string {
 /**
  * [SQL 생성] 옵션과 선택한 DBMS에 맞춰 SQL DDL 또는 Prisma 스키마를 만든다
  */
-export function generateSql(tables: ErdTable[], settings: ExportSettings): string {
-  if (tables.length === 0) return '-- 정의된 테이블이 없습니다.';
+export function generateSql(tables: ErdTable[], settings: ExportSettings, metadata?: { version: number; generatedAt: string }): string {
+  const maria = settings.dialect === 'mariadb';
+  const quote = (name: string) => maria ? '`' + name.replace(/`/g, '``') + '`' : name;
+  const comment = (value: string) => value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  if (maria) {
+    for (const table of tables) for (const column of table.columns) {
+      const expression = columnTypeExpression(column);
+      const error = mariaDbTypeError(expression);
+      const inline = /\((\d+)(?:,\s*(\d+))?\)/.exec(column.dataType);
+      const conflict = inline && ((column.length !== undefined && Number(inline[1]) !== column.length)
+        || (column.precision !== undefined && Number(inline[1]) !== column.precision)
+        || (column.scale !== undefined && Number(inline[2] ?? 0) !== column.scale));
+      const base = column.dataType.replace(/\(.*\)/s, '').replace(/ UNSIGNED$/i, '').toUpperCase();
+      const wrongParameters = (column.length !== undefined && !['CHAR', 'VARCHAR', 'BINARY', 'VARBINARY', 'BIT'].includes(base))
+        || ((column.precision !== undefined || column.scale !== undefined) && !['DECIMAL', 'DEC', 'NUMERIC', 'FIXED', 'DATETIME', 'TIME', 'TIMESTAMP'].includes(base))
+        || (column.scale !== undefined && column.precision === undefined);
+      if (error || conflict || wrongParameters) throw new Error(`${table.name}.${column.name}: ${error || '자료형 매개변수가 일치하지 않습니다.'}`);
+      if (settings.includeForeignKeys && column.isForeignKey) {
+        const [name, field] = (column.references ?? '').split('.');
+        const parent = tables.find(t => t.name.toLowerCase() === name?.toLowerCase());
+        if (!parent?.columns.some(c => c.name.toLowerCase() === field?.toLowerCase())) throw new Error(`${table.name}.${column.name}: FK 참조를 찾을 수 없습니다.`);
+      }
+    }
+  }
+  if (tables.length === 0) return (metadata
+    ? `-- Saved Version: ${metadata.version}\n-- Generated At: ${metadata.generatedAt}\n` : '') + '-- 정의된 테이블이 없습니다.';
 
   if (settings.dialect === 'prisma') {
     return generatePrismaSchema(tables);
@@ -147,7 +171,8 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
   lines.push(`-- ==============================================================`);
   lines.push(`-- SyncArch Auto-generated DDL Script`);
   lines.push(`-- Target DBMS: ${dbmsTitleMap[settings.dialect] || settings.dialect.toUpperCase()}`);
-  lines.push(`-- Generated At: ${new Date().toISOString()}`);
+  lines.push(`-- Generated At: ${metadata?.generatedAt ?? new Date().toISOString()}`);
+  if (metadata) lines.push(`-- Saved Version: ${metadata.version}`);
   lines.push(`-- ==============================================================\n`);
 
   if (settings.dialect === 'mysql' || settings.dialect === 'mariadb') {
@@ -164,7 +189,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
       if (settings.dialect === 'postgres') {
         lines.push(`DROP TABLE IF EXISTS ${t.name} CASCADE;`);
       } else if (settings.dialect === 'mysql' || settings.dialect === 'mariadb' || settings.dialect === 'sqlite') {
-        lines.push(`DROP TABLE IF EXISTS ${t.name};`);
+        lines.push(`DROP TABLE IF EXISTS ${quote(t.name)};`);
       } else if (settings.dialect === 'oracle') {
         lines.push(`BEGIN EXECUTE IMMEDIATE 'DROP TABLE ${t.name.toUpperCase()} CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;\n/`);
       } else if (settings.dialect === 'mssql') {
@@ -182,12 +207,12 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
   lines.push(`-- 2. CREATE TABLES`);
   sortedTables.forEach(table => {
     const tableName = settings.dialect === 'oracle' ? table.name.toUpperCase() : table.name;
-    lines.push(`-- Table: ${tableName} (${table.comment || '설명 없음'})`);
+    lines.push(`-- Table: ${tableName} (${table.comment || '설명 없음'})`.replace(/[\r\n]/g, ' '));
     
     if (settings.dialect === 'mssql') {
       lines.push(`CREATE TABLE dbo.${tableName} (`);
     } else {
-      lines.push(`CREATE TABLE ${tableName} (`);
+      lines.push(`CREATE TABLE ${quote(tableName)} (`);
     }
 
     const colDefinitions: string[] = [];
@@ -197,10 +222,10 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
     table.columns.forEach(col => {
       const colName = settings.dialect === 'oracle' ? col.name.toUpperCase() : col.name;
       let mappedType = mapDataType(columnTypeExpression(col), settings.dialect);
-      let def = `    ${colName.padEnd(16)} ${mappedType}`;
+      let def = `    ${quote(colName).padEnd(16)} ${mappedType}`;
 
       if (col.isPrimaryKey) {
-        pkCols.push(colName);
+        pkCols.push(quote(colName));
         if (settings.dialect === 'oracle' && col.dataType.toUpperCase().includes('INT')) {
           def += ' GENERATED ALWAYS AS IDENTITY';
         }
@@ -223,7 +248,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 
       // [SQL 생성] MySQL/MariaDB 인라인 COMMENT 지원
       if ((settings.dialect === 'mysql' || settings.dialect === 'mariadb') && settings.includeComments && col.comment) {
-        def += ` COMMENT '${col.comment.replace(/'/g, "\\'")}'`;
+        def += ` COMMENT '${comment(col.comment)}'`;
       }
 
       colDefinitions.push(def);
@@ -242,7 +267,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
             );
           } else {
             fkConstraints.push(
-              `    CONSTRAINT ${fkName} FOREIGN KEY (${colName}) REFERENCES ${refTable}(${refCol}) ON DELETE CASCADE`
+              `    CONSTRAINT ${quote(fkName)} FOREIGN KEY (${quote(colName)}) REFERENCES ${quote(refTable)}(${quote(refCol)}) ON DELETE CASCADE`
             );
           }
         }
@@ -251,7 +276,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 
     // [SQL 생성] 기본 키 제약
     if (pkCols.length > 0) {
-      colDefinitions.push(`    CONSTRAINT pk_${tableName} PRIMARY KEY (${pkCols.join(', ')})`);
+      colDefinitions.push(`    CONSTRAINT ${quote(`pk_${tableName}`)} PRIMARY KEY (${pkCols.join(', ')})`);
     }
 
     // [SQL 생성] 외래 키 추가
@@ -261,7 +286,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
     
     if (settings.dialect === 'mysql' || settings.dialect === 'mariadb') {
       if (settings.includeComments && table.comment) {
-        lines.push(`) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='${table.comment.replace(/'/g, "\\'")}';\n`);
+        lines.push(`) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='${comment(table.comment)}';\n`);
       } else {
         lines.push(`) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n`);
       }
@@ -301,7 +326,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
           } else if (settings.dialect === 'sqlite') {
             lines.push(`CREATE INDEX IF NOT EXISTS idx_${tableName}_${colName} ON ${tableName} (${colName});`);
           } else {
-            lines.push(`CREATE INDEX idx_${tableName}_${colName} ON ${tableName} (${colName});`);
+            lines.push(`CREATE INDEX ${quote(`idx_${tableName}_${colName}`)} ON ${quote(tableName)} (${quote(colName)});`);
           }
         }
       });

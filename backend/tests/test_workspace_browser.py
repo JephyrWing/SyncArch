@@ -126,7 +126,7 @@ def test_access_loss_stops_all_polling_and_preserves_backup(browser_session, end
                    if route.request.method == "PUT" else route.continue_())
         page.get_by_placeholder(SUMMARY).fill("권한 상실에도 보존할 초안")
         expect(page.get_by_role("status").filter(has_text="저장 실패")).to_be_visible()
-        page.route(f"**/api/projects/{pid}/{endpoint}", lambda route: error_response(route, status, code)
+        page.route(f"**/api/projects/{pid}/{endpoint}*", lambda route: error_response(route, status, code)
                    if route.request.method != "PUT" else error_response(route, 503, "DB_UNAVAILABLE"))
         expect(page.get_by_role("alert").filter(has_text="연결을 중단했습니다")).to_be_visible(timeout=10000)
         requests = []
