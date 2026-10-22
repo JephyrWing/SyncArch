@@ -14,7 +14,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
-// Initialize GoogleGenAI if key is present
+// [AI 초안] 키가 있으면 GoogleGenAI를 초기화한다
 let ai: GoogleGenAI | null = null;
 if (process.env.GEMINI_API_KEY) {
   ai = new GoogleGenAI({
@@ -27,7 +27,7 @@ if (process.env.GEMINI_API_KEY) {
   });
 }
 
-// Fallback smart generators when API key is missing or offline
+// [AI 초안] API 키가 없거나 오프라인일 때 쓰는 대체 생성기
 function generateFallbackDraft(step: number, projectSummary: string, context: any) {
   if (step === 1) {
     return {
@@ -216,7 +216,7 @@ function generateFallbackDraft(step: number, projectSummary: string, context: an
   }
 }
 
-// AI Draft Endpoint
+// [AI 초안] AI 초안 엔드포인트
 app.post('/api/ai/draft', async (req, res) => {
   const { step, projectSummary, previousContext } = req.body;
 
@@ -360,7 +360,7 @@ Step ${step}에 맞는 최적의 설계 초안 2~3개 항목을 제안하세요.
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    // Tag draft items with isAiDraft: true
+    // [AI 초안] 초안 항목에 isAiDraft: true 표시
     if (parsed.cards) parsed.cards.forEach((c: any) => (c.isAiDraft = true));
     if (parsed.features) parsed.features.forEach((f: any) => (f.isAiDraft = true));
     if (parsed.nodes) {
@@ -386,7 +386,7 @@ Step ${step}에 맞는 최적의 설계 초안 2~3개 항목을 제안하세요.
   }
 });
 
-// Vite middleware or production static
+// [AI 초안] Vite 미들웨어 또는 운영용 정적 파일
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

@@ -4,56 +4,167 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { LayoutGrid, LogOut } from 'lucide-react';
 import { Header } from './components/Header.tsx';
 import { Step1IdeaBoard } from './components/Step1IdeaBoard.tsx';
 import { Step2FeatureSpec } from './components/Step2FeatureSpec.tsx';
 import { Step3Architecture } from './components/Step3Architecture.tsx';
 import { Step4ErdStudio } from './components/Step4ErdStudio.tsx';
 import { ExportModal } from './components/ExportModal.tsx';
-import type { 
-  StepNumber, 
-  TeamMember, 
-  IdeaCard, 
-  FeatureSpec, 
-  ArchNode, 
-  ArchConnection, 
-  ErdTable, 
+import { LoginScreen } from './components/LoginScreen.tsx';
+import { ProjectLobby } from './components/ProjectLobby.tsx';
+import { InviteButton } from './components/InviteButton.tsx';
+import { ChatPanel } from './components/ChatPanel.tsx';
+import { CollabBanner, SaveStatusBadge, ToastStack, type Toast } from './components/CollabStatus.tsx';
+import {
+  cloneProject,
+  createProject,
+  fetchDocument,
+  fetchMe,
+  joinProject,
+  listMembers,
+  listProjects,
+  logout,
+  saveDocument,
+} from './api/projects.ts';
+import { ApiError } from './api/client.ts';
+import { toTeamMembers } from './adapters/projectAdapter.ts';
+import { SAFE_TO_LEAVE, useProjectDocument, type RemoteChange } from './hooks/useProjectDocument.ts';
+import { usePresence } from './hooks/usePresence.ts';
+import { clearReferences, findReferences, renameColumn, renameTable } from './utils/erdRename.ts';
+import { isValidConnection } from './utils/architecture.ts';
+import type {
+  StepNumber,
+  TeamMember,
+  IdeaCard,
+  FeatureSpec,
+  ArchNode,
+  ArchConnection,
+  ErdTable,
   SnapshotHistory,
   ErdColumn,
   ProjectData,
+  ProjectSummary,
+  SessionUser,
   SqlDialect,
   ArchVersion
 } from './types/index.ts';
-import { 
-  INITIAL_MEMBERS, 
-  INITIAL_PROJECTS 
-} from './data/initialData.ts';
 
 export default function App() {
-  // Multi-Project State
-  const [projects, setProjects] = useState<ProjectData[]>(INITIAL_PROJECTS);
-  const [currentProjectId, setCurrentProjectId] = useState<string>(INITIAL_PROJECTS[0].id);
+  // [구글 로그인] 세션 확인 중에는 undefined다.
+  const [me, setMe] = useState<SessionUser | null | undefined>(undefined);
 
-  const currentProject = projects.find((p) => p.id === currentProjectId) || projects[0];
+  useEffect(() => {
+    fetchMe().then(setMe).catch(() => setMe(null));
+  }, []);
 
-  // 5 Team Members
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_MEMBERS);
-  const [activeSpotlightMemberId, setActiveSpotlightMemberId] = useState<string | null>(null);
+  if (me === undefined) {
+    return <div className="flex h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">불러오는 중…</div>;
+  }
+  if (!me) return <LoginScreen onLogin={setMe} />;
+  return <Workspace me={me} onLoggedOut={() => setMe(null)} />;
+}
 
-  // Snapshots
-  const [snapshots, setSnapshots] = useState<SnapshotHistory[]>([
-    {
-      id: 'snap-init',
-      name: '초기 MVP 기획안 (v1.0)',
-      timestamp: Date.now() - 3600000,
-      dateStr: '1시간 전',
-    },
-  ]);
-  const [snapshotStore, setSnapshotStore] = useState<Record<string, any>>({
-    'snap-init': JSON.parse(JSON.stringify(INITIAL_PROJECTS[0])),
+// [기능 명세] 개수 + 1이 아니라 최댓값 + 1을 써서, FEAT-02를 지워도 다음 기능이 FEAT-03을 다시 쓰지 않게 한다(02 FEAT 03).
+const nextFeatureNumber = (features: FeatureSpec[]): number =>
+  Math.max(0, ...features.map((f) => Number(/^FEAT-(\d+)$/.exec(f.id)?.[1] ?? 0))) + 1;
+
+function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => void }) {
+  // [프로젝트] 프로젝트는 서버에서 받고, currentStep은 개인 화면 상태다(02 VIEW 02).
+  const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
+  const [isListLoaded, setIsListLoaded] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<StepNumber>(1);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const pushToast = (text: string, details: string[] = [], key?: string) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev.filter((t) => !key || t.key !== key).slice(-3), { id, key, text, details }]);
+    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 8000);
+  };
+
+  const handleRemoteChange = (change: RemoteChange) => {
+    pushToast(change.text, change.changes.slice(0, 4).map((c) => `${c.area} '${c.name}' ${c.kind}`), `remote:${change.actorId}`);
+  };
+
+  const doc = useProjectDocument(currentProjectId, { onRemoteChange: handleRemoteChange, onAuthExpired: onLoggedOut });
+  // [프로젝트] 다른 프로젝트를 여는 동안 이전 프로젝트 문서를 잠깐이라도 보여 주지 않는다.
+  const currentProject: ProjectData | null =
+    doc.project && doc.project.id === currentProjectId ? { ...doc.project, currentStep } : null;
+  const myRole = projectList.find((p) => p.id === currentProjectId)?.role;
+  const canLeave = SAFE_TO_LEAVE.includes(doc.status);
+
+  const refreshProjects = async (selectId?: string) => {
+    const list = await listProjects();
+    setProjectList(list);
+    setIsListLoaded(true);
+    // [프로젝트] await 뒤에 다시 확인한다. 요청 중에 생긴 편집을 두고 다른 프로젝트로 넘어가지 않는다.
+    const target = selectId && doc.isSafeToLeave() ? selectId : undefined;
+    if (selectId && !target) pushToast('새 프로젝트가 준비됐습니다', ['저장이 끝난 뒤 프로젝트 목록에서 여세요.']);
+    // [프로젝트] 로그인 직후에는 바로 열지 않고 로비에서 생성·참가·선택하게 한다.
+    setCurrentProjectId((prev) => target ?? (prev && list.some((p) => p.id === prev) ? prev : null));
+  };
+
+  useEffect(() => {
+    refreshProjects().catch((error: Error) => {
+      setIsListLoaded(true);
+      pushToast('프로젝트 목록을 불러오지 못했습니다', [error.message]);
+    });
+  }, []);
+
+  // [멤버 관리] 예전 하드코딩 팀 목록 대신 실제 멤버를 쓴다.
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  useEffect(() => {
+    if (!currentProjectId) return;
+    listMembers(currentProjectId).then((members) => setTeamMembers(toTeamMembers(members))).catch(() => setTeamMembers([]));
+  }, [currentProjectId]);
+
+  // [협업 상태] 접속 중인 멤버와 보고 있는 단계. 아바타를 누르면 그 멤버의 단계를 따라간다.
+  const online = usePresence(currentProjectId, currentStep);
+  const [followId, setFollowId] = useState<string | null>(null);
+  const people: TeamMember[] = teamMembers.map((member) => {
+    const entry = online.find((o) => o.userId === member.id);
+    return { ...member, isOnline: Boolean(entry), currentStep: entry?.step ?? member.currentStep, isSpotlight: member.id === followId };
   });
+  // [협업 상태] 처음 목록을 받기 전이거나 멤버에서 빠진 사람은 따라가지 않는다.
+  const followed = people.find((member) => member.id === followId && member.isOnline) ?? null;
+  useEffect(() => {
+    if (followed) setCurrentStep(followed.currentStep);
+  }, [followed?.currentStep]);
+  useEffect(() => setFollowId(null), [currentProjectId]);
 
-  // Responsive Viewport Detection (Mobile / Tablet / Desktop)
+  // [구글 로그인] 같은 브라우저 창에서 다른 계정으로 로그인하면 세션 쿠키가 바뀐다. 이 탭이 모르고 남의 이름으로
+  // 저장하지 않게, 창으로 돌아올 때와 10초마다 확인해서 바뀌었으면 새 계정으로 다시 연다.
+  useEffect(() => {
+    const check = () =>
+      fetchMe()
+        .then((user) => {
+          if (user.id === me.id) return;
+          if (doc.isSafeToLeave()) window.location.reload();
+          else pushToast('이 브라우저에서 다른 계정으로 로그인했습니다', ['저장 안 된 변경을 백업한 뒤 새로고침하세요. 지금 저장하면 다른 계정 이름으로 저장됩니다.'], 'account-switch');
+        })
+        .catch(() => undefined);
+    window.addEventListener('focus', check);
+    const timer = window.setInterval(check, 10000);
+    return () => {
+      window.removeEventListener('focus', check);
+      window.clearInterval(timer);
+    };
+  }, [me.id]);
+
+  useEffect(() => {
+    const warnUnsaved = (e: BeforeUnloadEvent) => {
+      if (!canLeave) e.preventDefault();
+    };
+    window.addEventListener('beforeunload', warnUnsaved);
+    return () => window.removeEventListener('beforeunload', warnUnsaved);
+  }, [canLeave]);
+
+  // [공통 화면] 스냅샷
+  const [snapshots, setSnapshots] = useState<SnapshotHistory[]>([]);
+  const [snapshotStore, setSnapshotStore] = useState<Record<string, any>>({});
+
+  // [공통 화면] 반응형 화면 크기 감지(모바일 / 태블릿 / 데스크톱)
   const [isDesktop, setIsDesktop] = useState<boolean>(() => {
     return typeof window !== 'undefined' ? window.innerWidth >= 1024 : true;
   });
@@ -66,7 +177,7 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Resizable Sidebar & Responsive State (persisted)
+  // [공통 화면] 크기 조절 사이드바와 반응형 상태(저장됨)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('syncarch_sidebar_width');
@@ -77,7 +188,7 @@ export default function App() {
   });
   const [mobileTab, setMobileTab] = useState<'editor' | 'canvas'>('editor');
 
-  // Drag resizer handler
+  // [공통 화면] 드래그 크기 조절 처리
   const handleStartResize = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -117,131 +228,161 @@ export default function App() {
     } catch {}
   };
 
-  // Modals
+  // [공통 화면] 모달
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  // Helper to update current project data
-  const updateCurrentProject = (updatedFields: Partial<ProjectData>) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === currentProjectId ? { ...p, ...updatedFields, updatedAt: '방금 전' } : p))
-    );
+  // [문서 저장] 프로젝트 전환이나 로그아웃 때 저장 안 된 편집을 버리지 않는다(02 SAVE 03).
+  const guardLeave = (): boolean => {
+    if (canLeave) return true;
+    pushToast('저장되지 않은 변경이 있습니다', ['상단에 "저장됨"이 표시된 뒤 다시 시도하세요. 실패·충돌이면 상단 안내에서 먼저 해결하세요.']);
+    return false;
   };
 
-  // Switch Project
+  const handleLogout = async () => {
+    if (!guardLeave()) return;
+    try {
+      await logout();
+    } catch (error) {
+      // [구글 로그인] 401은 서버 세션이 이미 없다는 뜻이다. 다른 실패면 세션은 살아 있다.
+      if (!(error instanceof ApiError && error.status === 401)) {
+        pushToast('로그아웃하지 못했습니다', [(error as Error).message]);
+        return;
+      }
+    }
+    // [문서 저장] 요청 중에 생긴 편집은 화면에 남고, 그 저장은 백업 선택지와 함께 실패한다.
+    if (!doc.isSafeToLeave()) {
+      pushToast('로그아웃했지만 저장되지 않은 변경이 있어 화면을 유지합니다', ['상단 안내에서 내 변경을 백업한 뒤 새로고침하세요.']);
+      return;
+    }
+    onLoggedOut();
+  };
+
+  // [프로젝트] 로비에서 만들면 팀장이 되고, 코드로 참가하면 편집자가 된다. 실패 메시지는 로비가 보여 준다.
+  const handleLobbyCreate = async (title: string, summary: string) => {
+    const created = await createProject(title, summary);
+    await refreshProjects(created.id);
+  };
+  const handleLobbyJoin = async (code: string) => {
+    const joined = await joinProject(code);
+    await refreshProjects(joined.id);
+    pushToast(`'${joined.title}'에 참가했습니다`, ['같은 화면을 팀원과 실시간으로 함께 편집합니다.']);
+  };
+  const handleBackToLobby = () => {
+    if (!guardLeave()) return;
+    setCurrentProjectId(null);
+    refreshProjects().catch(() => undefined);
+  };
+
+  const statusSlot = (
+    <div className="flex items-center gap-1.5">
+      <SaveStatusBadge status={doc.status} version={doc.version} />
+      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} />}
+      <button
+        onClick={handleBackToLobby}
+        className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:text-white"
+        title="프로젝트 목록(생성·참가)으로"
+      >
+        <LayoutGrid className="h-3.5 w-3.5" />
+        <span className="hidden xl:inline">목록</span>
+      </button>
+      <button
+        onClick={handleLogout}
+        className="hidden sm:flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:text-white"
+        title="로그아웃"
+      >
+        <LogOut className="h-3.5 w-3.5" />
+        <span className="hidden xl:inline">{me.displayName}</span>
+      </button>
+    </div>
+  );
+
+  const toastStack = <ToastStack toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />;
+
+  if (isListLoaded && !currentProjectId) {
+    return (
+      <>
+        <ProjectLobby
+          me={me}
+          projects={projectList}
+          onOpen={setCurrentProjectId}
+          onCreate={handleLobbyCreate}
+          onJoin={handleLobbyJoin}
+          onLogout={handleLogout}
+        />
+        {toastStack}
+      </>
+    );
+  }
+
+  if (!currentProject) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-slate-950 p-4 text-sm text-slate-300">
+        {doc.status === 'error' ? (
+          <>
+            <p className="text-rose-300">{doc.message}</p>
+            <div className="flex gap-2">
+              <button onClick={doc.reloadLatest} className="rounded-lg bg-indigo-600 px-3 py-1.5 font-bold text-white">다시 불러오기</button>
+              <button onClick={() => setCurrentProjectId(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300">목록으로</button>
+            </div>
+          </>
+        ) : (
+          <p>불러오는 중…</p>
+        )}
+        {toastStack}
+      </div>
+    );
+  }
+
+  // [공통 화면] 현재 프로젝트 데이터를 고치는 도우미
+  const updateCurrentProject = (updatedFields: Partial<ProjectData>) => {
+    doc.update(updatedFields);
+  };
+
+  // [프로젝트] 프로젝트 전환
   const handleSelectProject = (id: string) => {
+    if (id === currentProjectId || !guardLeave()) return;
     setCurrentProjectId(id);
   };
 
-  // Create New Project with specified DBMS
-  const handleCreateProject = (
-    title: string, 
-    summary: string, 
-    categoryTag: string, 
-    targetDbms: SqlDialect = 'postgres'
-  ) => {
-    const newProjId = `proj-${Date.now()}`;
-    const newProject: ProjectData = {
-      id: newProjId,
-      title,
-      summary,
-      categoryTag,
-      targetDbms,
-      currentStep: 1,
-      stepLocks: { 1: false, 2: false, 3: false, 4: false },
-      ideas: [
-        {
-          id: `idea-init-${Date.now()}`,
-          category: 'problems_goals',
-          title: `${title} 핵심 과제 정의`,
-          description: summary,
-          author: '현우',
-          votes: 1,
-          votedBy: ['현우'],
-          rationale: `${title} 구축을 통해 기존의 비효율 문제를 해결하고자 함`,
-          decisionStatus: 'REVIEW',
-          comments: [],
-        },
-      ],
-      features: [
-        {
-          id: 'FEAT-01',
-          domain: '코어',
-          name: `${title} 초기 데이터 조회`,
-          priority: 'P0',
-          assignee: '현우',
-          method: 'GET',
-          endpoint: '/api/v1/items',
-          requestFields: 'page: number, limit: number',
-          responseFields: 'items: array, total: number',
-          summary: '기본 목록 조회',
-          status: 'PLANNED',
-        },
-      ],
-      nodes: [
-        { id: `node-web-${Date.now()}`, category: 'Client', name: 'Web Dashboard', techStack: ['React', 'Tailwind'], x: 80, y: 150, description: '관리자 대시보드', assignedTeam: 'Frontend' },
-        { id: `node-api-${Date.now()}`, category: 'Service', name: 'Core Backend API', techStack: ['NestJS', 'TypeScript'], x: 420, y: 150, description: '비즈니스 로직 처리', assignedTeam: 'Backend' },
-        { id: `node-db-${Date.now()}`, category: 'DataStore', name: 'Primary DB', techStack: [targetDbms === 'mysql' ? 'MySQL 8.0' : targetDbms === 'oracle' ? 'Oracle 19c' : 'PostgreSQL 16'], x: 750, y: 150, description: '영구 스토리지', assignedTeam: 'Infra' },
-      ],
-      connections: [],
-      archVersions: [
-        {
-          id: `ver-${Date.now()}`,
-          versionNumber: 'v1.0 (초기 계획)',
-          label: '기본 3-Tier 아키텍처',
-          description: 'Client -> Service -> DB 기본 레이어',
-          createdAt: '방금 전',
-          nodes: [],
-          connections: [],
-        },
-      ],
-      currentArchVersionId: `ver-${Date.now()}`,
-      tables: [
-        {
-          id: `tbl-${Date.now()}`,
-          name: 'users',
-          comment: '사용자 계정',
-          relatedFeatureIds: ['FEAT-01'],
-          x: 100,
-          y: 100,
-          columns: [
-            { id: 'c1', name: 'id', dataType: targetDbms === 'mysql' ? 'VARCHAR(36)' : 'UUID', isPrimaryKey: true, isForeignKey: false, isUnique: true, isNullable: false, comment: '식별자' },
-            { id: 'c2', name: 'created_at', dataType: targetDbms === 'mysql' ? 'DATETIME(6)' : 'TIMESTAMPTZ', isPrimaryKey: false, isForeignKey: false, isUnique: false, isNullable: false, defaultValue: 'CURRENT_TIMESTAMP', comment: '생성 시각' },
-          ],
-        },
-      ],
-      updatedAt: '방금 전',
-    };
+  // [프로젝트] 새 프로젝트는 서버의 빈 문서에서 시작하고, 추가 정보는 첫 저장에 담는다.
+  async function handleCreateProject(title: string, summary: string, categoryTag: string, targetDbms: SqlDialect) {
+    if (!guardLeave()) return;
+    try {
+      const created = await createProject(title, summary);
+      if (categoryTag || targetDbms !== created.targetDbms) {
+        await saveDocument(created.id, {
+          baseVersion: 1,
+          mutationId: crypto.randomUUID(),
+          project: { title, summary, categoryTag, targetDbms },
+          payload: { schemaVersion: 1, ideas: [], features: [], nodes: [], connections: [], tables: [] },
+        });
+      }
+      await refreshProjects(created.id);
+    } catch (error) {
+      pushToast('프로젝트를 만들지 못했습니다', [(error as Error).message]);
+    }
+  }
 
-    setProjects([...projects, newProject]);
-    setCurrentProjectId(newProjId);
-  };
-
-  // Clone Project
-  const handleCloneProject = (id: string) => {
-    const target = projects.find((p) => p.id === id);
-    if (!target) return;
-    const clonedId = `proj-clone-${Date.now()}`;
-    const cloned: ProjectData = {
-      ...JSON.parse(JSON.stringify(target)),
-      id: clonedId,
-      title: `${target.title} (복사본)`,
-      updatedAt: '방금 전',
-    };
-    setProjects([...projects, cloned]);
-    setCurrentProjectId(clonedId);
-  };
-
-  // Delete Project
-  const handleDeleteProject = (id: string) => {
-    if (projects.length <= 1) return;
-    const remaining = projects.filter((p) => p.id !== id);
-    setProjects(remaining);
-    if (currentProjectId === id) {
-      setCurrentProjectId(remaining[0].id);
+  // [프로젝트] 저장 안 된 로컬 편집이 아니라 서버에 저장된 버전을 내 소유의 새 프로젝트로 복제한다.
+  const handleCloneProject = async (id: string) => {
+    if (!guardLeave()) return;
+    try {
+      const source = await fetchDocument(id);
+      if (!source) return;
+      const cloned = await cloneProject(id, source.version, `${source.project.title} (복사본)`);
+      await refreshProjects(cloned.id);
+    } catch (error) {
+      pushToast('프로젝트를 복사하지 못했습니다', [(error as Error).message]);
     }
   };
 
-  // Step Lock Toggle
+  const headerProjects: ProjectData[] = projectList.map((summary) =>
+    summary.id === currentProject.id
+      ? currentProject
+      : { ...currentProject, ...summary, ideas: [], features: [], nodes: [], connections: [], tables: [], archVersions: [] }
+  );
+
+  // [공통 화면] 단계 잠금 전환
   const handleToggleLock = (step: StepNumber) => {
     updateCurrentProject({
       stepLocks: {
@@ -251,31 +392,9 @@ export default function App() {
     });
   };
 
-  // Spotlight Follow Mode
-  const handleToggleSpotlight = (memberId: string) => {
-    if (activeSpotlightMemberId === memberId) {
-      setActiveSpotlightMemberId(null);
-      setTeamMembers((prev) => prev.map((m) => ({ ...m, isSpotlight: false })));
-    } else {
-      setActiveSpotlightMemberId(memberId);
-      const target = teamMembers.find((m) => m.id === memberId);
-      if (target) {
-        updateCurrentProject({ currentStep: target.currentStep });
-      }
-      setTeamMembers((prev) =>
-        prev.map((m) => ({
-          ...m,
-          isSpotlight: m.id === memberId,
-        }))
-      );
-    }
-  };
-
-  const activeSpotlightMember = teamMembers.find((m) => m.id === activeSpotlightMemberId) || null;
-
-  // Snapshot Handlers
+  // [공통 화면] 스냅샷 처리
   const handleSaveSnapshot = (name: string) => {
-    const id = `snap-${Date.now()}`;
+    const id = crypto.randomUUID();
     const newSnapshot: SnapshotHistory = {
       id,
       name: `[${currentProject.title}] ${name}`,
@@ -296,11 +415,11 @@ export default function App() {
     }
   };
 
-  // Step 1 Handlers
+  // [아이디어 보드] Step 1 처리
   const handleAddCard = (card: Omit<IdeaCard, 'id' | 'votes' | 'votedBy' | 'comments'>) => {
     const newCard: IdeaCard = {
       ...card,
-      id: `idea-${Date.now()}`,
+      id: crypto.randomUUID(),
       votes: 1,
       votedBy: [card.author],
       comments: [],
@@ -347,7 +466,7 @@ export default function App() {
             comments: [
               ...card.comments,
               {
-                id: `comm-${Date.now()}`,
+                id: crypto.randomUUID(),
                 author,
                 text,
                 createdAt: '방금 전',
@@ -360,9 +479,9 @@ export default function App() {
     });
   };
 
-  // Step 2 Handlers
+  // [기능 명세] Step 2 처리
   const handleAddFeature = (feat: Omit<FeatureSpec, 'id'>) => {
-    const newId = `FEAT-${String(currentProject.features.length + 1).padStart(2, '0')}`;
+    const newId = `FEAT-${String(nextFeatureNumber(currentProject.features)).padStart(2, '0')}`;
     const newFeature: FeatureSpec = {
       ...feat,
       id: newId,
@@ -387,7 +506,7 @@ export default function App() {
     const existingStoryIds = new Set(currentProject.features.map((f) => f.relatedStoryId).filter(Boolean));
 
     const newFeatures: FeatureSpec[] = [];
-    let count = currentProject.features.length + 1;
+    let count = nextFeatureNumber(currentProject.features);
 
     highVoteIdeas.forEach((idea) => {
       if (!existingStoryIds.has(idea.id)) {
@@ -414,11 +533,11 @@ export default function App() {
     }
   };
 
-  // Step 3 Handlers & Versioning
+  // [시스템 아키텍처] Step 3 처리와 버전 관리
   const handleAddNode = (node: Omit<ArchNode, 'id'>) => {
     const newNode: ArchNode = {
       ...node,
-      id: `node-${Date.now()}`,
+      id: crypto.randomUUID(),
     };
     updateCurrentProject({ nodes: [...currentProject.nodes, newNode] });
   };
@@ -443,14 +562,10 @@ export default function App() {
   };
 
   const handleAddConnection = (conn: Omit<ArchConnection, 'id'>) => {
-    const validSource = currentProject.nodes.some((n) => n.id === conn.sourceId);
-    const validTarget = currentProject.nodes.some((n) => n.id === conn.targetId);
-    if (!validSource || !validTarget || conn.sourceId === conn.targetId) {
-      return;
-    }
+    if (!isValidConnection(currentProject.nodes, conn.sourceId, conn.targetId)) return;
     const newConn: ArchConnection = {
       ...conn,
-      id: `conn-${Date.now()}`,
+      id: crypto.randomUUID(),
     };
     updateCurrentProject({ connections: [...currentProject.connections, newConn] });
   };
@@ -459,14 +574,8 @@ export default function App() {
     updateCurrentProject({
       connections: currentProject.connections.map((c) => {
         if (c.id !== id) return c;
-        const newSourceId = updated.sourceId ?? c.sourceId;
-        const newTargetId = updated.targetId ?? c.targetId;
-        const validSource = currentProject.nodes.some((n) => n.id === newSourceId);
-        const validTarget = currentProject.nodes.some((n) => n.id === newTargetId);
-        if (!validSource || !validTarget || newSourceId === newTargetId) {
-          return c;
-        }
-        return { ...c, ...updated };
+        const next = { ...c, ...updated };
+        return isValidConnection(currentProject.nodes, next.sourceId, next.targetId) ? next : c;
       }),
     });
   };
@@ -489,7 +598,7 @@ export default function App() {
   };
 
   const handleSaveNewArchVersion = (versionNumber: string, label: string, description: string) => {
-    const newVerId = `ver-${Date.now()}`;
+    const newVerId = crypto.randomUUID();
     const newVersion: ArchVersion = {
       id: newVerId,
       versionNumber,
@@ -506,7 +615,7 @@ export default function App() {
     });
   };
 
-  // Step 4 Handlers & Target DBMS
+  // [ERD 설계] Step 4 처리와 대상 DBMS
   const handleChangeTargetDbms = (dbms: SqlDialect) => {
     updateCurrentProject({ targetDbms: dbms });
   };
@@ -514,7 +623,7 @@ export default function App() {
   const handleAddTable = (table: Omit<ErdTable, 'id'>) => {
     const newTable: ErdTable = {
       ...table,
-      id: `tbl-${Date.now()}`,
+      id: crypto.randomUUID(),
     };
     updateCurrentProject({ tables: [...currentProject.tables, newTable] });
   };
@@ -525,16 +634,35 @@ export default function App() {
     });
   };
 
+  const describeRefs = (refs: { tableName: string; columnName: string }[]) =>
+    refs.map((r) => `${r.tableName}.${r.columnName}`).join(', ');
+
+  // [ERD 설계] 팀원 요청: 테이블 이름을 바꾸면 그 테이블을 가리키는 FK도 같은 저장에서 모두 바꾼다.
+  const handleRenameTable = (id: string, name: string) => {
+    updateCurrentProject({ tables: renameTable(currentProject.tables, id, name) });
+  };
+
   const handleDeleteTable = (id: string) => {
+    const table = currentProject.tables.find((t) => t.id === id);
+    if (!table) return;
+    const refs = findReferences(currentProject.tables, table.name).filter((r) => r.tableId !== id);
+    if (
+      refs.length > 0 &&
+      !window.confirm(
+        `'${table.name}'을(를) 참조하는 FK ${refs.length}개(${describeRefs(refs)})의 FK 표시와 참조가 해제됩니다. 컬럼은 남습니다.\n휴지통이 없어 되돌릴 수 없습니다. 삭제할까요?`
+      )
+    ) {
+      return;
+    }
     updateCurrentProject({
-      tables: currentProject.tables.filter((t) => t.id !== id),
+      tables: clearReferences(currentProject.tables.filter((t) => t.id !== id), table.name),
     });
   };
 
   const handleAddColumn = (tableId: string, col: Omit<ErdColumn, 'id'>) => {
     const newCol: ErdColumn = {
       ...col,
-      id: `col-${Date.now()}`,
+      id: crypto.randomUUID(),
     };
     updateCurrentProject({
       tables: currentProject.tables.map((t) => (t.id === tableId ? { ...t, columns: [...t.columns, newCol] } : t)),
@@ -542,20 +670,36 @@ export default function App() {
   };
 
   const handleUpdateColumn = (tableId: string, colId: string, updated: Partial<ErdColumn>) => {
+    const { name, ...rest } = updated;
+    // [ERD 설계] 컬럼 이름을 바꾸면 입력할 때마다 FK 참조도 함께 바뀐다.
+    const tables = name === undefined ? currentProject.tables : renameColumn(currentProject.tables, tableId, colId, name);
     updateCurrentProject({
-      tables: currentProject.tables.map((t) => {
+      tables: tables.map((t) => {
         if (t.id !== tableId) return t;
         return {
           ...t,
-          columns: t.columns.map((c) => (c.id === colId ? { ...c, ...updated } : c)),
+          columns: t.columns.map((c) => (c.id === colId ? { ...c, ...rest } : c)),
         };
       }),
     });
   };
 
   const handleDeleteColumn = (tableId: string, colId: string) => {
+    const table = currentProject.tables.find((t) => t.id === tableId);
+    const column = table?.columns.find((c) => c.id === colId);
+    if (!table || !column) return;
+    const refs = findReferences(currentProject.tables, table.name, column.name);
+    if (
+      refs.length > 0 &&
+      !window.confirm(
+        `'${table.name}.${column.name}'을(를) 참조하는 FK ${refs.length}개(${describeRefs(refs)})의 FK 표시와 참조가 해제됩니다. 삭제할까요?`
+      )
+    ) {
+      return;
+    }
+    const cleared = clearReferences(currentProject.tables, table.name, column.name);
     updateCurrentProject({
-      tables: currentProject.tables.map((t) => {
+      tables: cleared.map((t) => {
         if (t.id !== tableId) return t;
         return {
           ...t,
@@ -573,30 +717,42 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 overflow-hidden select-none">
-      {/* 56px Global Header with Project Switcher */}
+      {/* [공통 화면] 프로젝트 전환이 있는 56px 전역 헤더 */}
       <Header
-        projects={projects}
+        projects={headerProjects}
         currentProject={currentProject}
         onSelectProject={handleSelectProject}
         onCreateProject={handleCreateProject}
         onCloneProject={handleCloneProject}
-        onDeleteProject={handleDeleteProject}
         title={currentProject.title}
         onUpdateTitle={(title) => updateCurrentProject({ title })}
         currentStep={currentProject.currentStep}
-        onChangeStep={(step) => updateCurrentProject({ currentStep: step })}
+        onChangeStep={(step) => {
+          setFollowId(null);
+          setCurrentStep(step);
+        }}
         stepLocks={currentProject.stepLocks}
         onToggleLock={handleToggleLock}
-        teamMembers={teamMembers}
-        onToggleSpotlight={handleToggleSpotlight}
-        activeSpotlightMember={activeSpotlightMember}
+        teamMembers={people}
+        meId={me.id}
+        onToggleSpotlight={(id) => setFollowId((prev) => (prev === id || id === me.id ? null : id))}
+        activeSpotlightMember={followed}
+        statusSlot={statusSlot}
         snapshots={snapshots}
         onSaveSnapshot={handleSaveSnapshot}
         onRestoreSnapshot={handleRestoreSnapshot}
         onOpenExport={() => setIsExportOpen(true)}
       />
 
-      {/* Main Split-View Workspace with Resizable Sidebar */}
+      <CollabBanner
+        status={doc.status}
+        message={doc.message}
+        onRetry={doc.retry}
+        onBackup={doc.downloadBackup}
+        onReloadLatest={doc.reloadLatest}
+      />
+
+      {/* [공통 화면] 크기 조절 사이드바가 있는 분할 작업 공간 */}
       <main className="flex-1 flex overflow-hidden">
         {currentProject.currentStep === 1 && (
           <Step1IdeaBoard
@@ -629,6 +785,7 @@ export default function App() {
             ideas={currentProject.ideas}
             teamMembers={teamMembers}
             isLocked={currentProject.stepLocks[2]}
+            excelUrl={`/api/projects/${currentProject.id}/api-spec.xlsx`}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
             onResetResize={handleResetSidebarWidth}
@@ -671,6 +828,7 @@ export default function App() {
             onChangeTargetDbms={handleChangeTargetDbms}
             onAddTable={handleAddTable}
             onUpdateTable={handleUpdateTable}
+            onRenameTable={handleRenameTable}
             onDeleteTable={handleDeleteTable}
             onAddColumn={handleAddColumn}
             onUpdateColumn={handleUpdateColumn}
@@ -687,7 +845,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Export Engine Modal (SQL DDL / Markdown) with current project's DBMS */}
+      {/* [명세서 생성] 현재 프로젝트 DBMS를 쓰는 내보내기 모달(SQL DDL / Markdown) */}
       <ExportModal
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
@@ -700,6 +858,17 @@ export default function App() {
         tables={currentProject.tables}
         defaultDbms={currentProject.targetDbms}
       />
+
+      {/* [채팅] 편집하면서 팀원과 이야기하는 대화창 */}
+      <ChatPanel
+        key={currentProject.id}
+        projectId={currentProject.id}
+        meId={me.id}
+        readOnly={doc.status === 'readonly'}
+        names={Object.fromEntries(teamMembers.map((m) => [m.id, m.name]))}
+      />
+
+      {toastStack}
     </div>
   );
 }

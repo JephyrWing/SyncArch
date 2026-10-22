@@ -53,7 +53,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [activeTab, setActiveTab] = useState<'sql' | 'markdown'>('sql');
   const [copied, setCopied] = useState(false);
 
-  // SQL Export Settings
+  // [명세서 생성] SQL 내보내기 설정
   const [settings, setSettings] = useState<ExportSettings>({
     dialect: defaultDbms,
     includeDropTable: true,
@@ -108,7 +108,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
       <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden text-slate-100">
-        {/* Header */}
+        {/* [명세서 생성] 헤더 */}
         <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
@@ -124,7 +124,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
           </div>
 
-          {/* Tab buttons */}
+          {/* [명세서 생성] 탭 버튼 */}
           <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveTab('sql')}
@@ -158,10 +158,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </button>
         </div>
 
-        {/* Options Toolbar (for SQL tab) */}
+        {/* [명세서 생성] 옵션 툴바(SQL 탭) */}
         {activeTab === 'sql' && (
           <div className="p-3 bg-slate-950/70 border-b border-slate-800 flex flex-col gap-2.5 text-xs shrink-0">
-            {/* Dialect Selector */}
+            {/* [명세서 생성] DBMS 선택 */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-300 flex items-center gap-1">
                 <Database className="w-3.5 h-3.5 text-sky-400" /> 대상 DBMS:
@@ -182,7 +182,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               ))}
             </div>
 
-            {/* DDL Toggles */}
+            {/* [명세서 생성] DDL 옵션 전환 */}
             {settings.dialect !== 'prisma' && (
               <div className="flex items-center gap-4 text-[11px] text-slate-300 flex-wrap pt-1 border-t border-slate-800/60">
                 <label className="flex items-center gap-1.5 cursor-pointer">
@@ -226,14 +226,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </div>
         )}
 
-        {/* Code View Area */}
+        {/* [명세서 생성] 코드 보기 영역 */}
         <div className="flex-1 overflow-auto p-4 bg-slate-950 font-mono text-xs text-slate-200">
           <pre className="whitespace-pre-wrap leading-relaxed select-text font-mono">
             {currentContent}
           </pre>
         </div>
 
-        {/* Bottom Actions */}
+        {/* [명세서 생성] 하단 버튼 */}
         <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
           <div className="text-xs text-slate-400">
             {activeTab === 'sql' ? (

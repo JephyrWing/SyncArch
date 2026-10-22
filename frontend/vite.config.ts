@@ -12,15 +12,15 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // Google callback을 포함한 같은 출처의 API 요청을 로컬 Flask로 전달합니다.
-      proxy: {
-        '/api': {target: 'http://127.0.0.1:5000'},
-      },
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
+      // [앱 설정] AI Studio에서는 DISABLE_HMR 환경변수로 HMR을 끈다.
+      // 수정 금지 - 에이전트가 편집하는 동안 화면 깜빡임을 막으려고 파일 감시를 끈다.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+      // [앱 설정] DISABLE_HMR가 true면 에이전트 편집 중 CPU를 아끼려고 파일 감시를 끈다.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // [앱 설정] 프론트 코드는 /api 상대 URL을 쓰고, 개발 중에는 Flask가 5000 포트에서 처리한다.
+      proxy: {
+        '/api': 'http://127.0.0.1:5000',
+      },
     },
   };
 });

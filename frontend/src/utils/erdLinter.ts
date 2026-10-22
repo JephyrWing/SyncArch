@@ -9,14 +9,14 @@ export function runErdLinter(tables: ErdTable[], features: FeatureSpec[]): Linte
     tableCols.set(t.name.toLowerCase(), new Set(t.columns.map(c => c.name.toLowerCase())));
   });
 
-  // Track which tables are referenced or reference others
+  // [ERD 린터] 어떤 테이블이 참조되거나 다른 테이블을 참조하는지 기록한다
   const connectedTableNames = new Set<string>();
 
   tables.forEach(table => {
     let hasOutboundFk = false;
 
     table.columns.forEach(col => {
-      // 1. Check Foreign Key Reference validity
+      // [ERD 린터] 1. FK 참조가 유효한지 검사
       if (col.isForeignKey && col.references) {
         hasOutboundFk = true;
         connectedTableNames.add(table.name.toLowerCase());
@@ -53,9 +53,9 @@ export function runErdLinter(tables: ErdTable[], features: FeatureSpec[]): Linte
         }
       }
 
-      // 2. Check Missing FK Index warning
+      // [ERD 린터] 2. FK 인덱스 누락 경고
       if (col.isForeignKey && !col.isPrimaryKey) {
-        // Highlighting that FK without index can cause performance bottleneck in joins
+        // [ERD 린터] 인덱스 없는 FK는 조인 성능 병목이 될 수 있음을 알린다
         issues.push({
           id: `fk-index-${table.id}-${col.id}`,
           type: 'missing_fk_index',
@@ -71,9 +71,9 @@ export function runErdLinter(tables: ErdTable[], features: FeatureSpec[]): Linte
       }
     });
 
-    // Check if table is completely orphan (unless it's the only table)
+    // [ERD 린터] 완전히 고립된 테이블인지 검사한다(테이블이 하나뿐이면 제외)
     if (tables.length > 1 && !hasOutboundFk && !connectedTableNames.has(table.name.toLowerCase())) {
-      // Check if any other table references this table
+      // [ERD 린터] 다른 테이블이 이 테이블을 참조하는지 검사한다
       const isReferenced = tables.some(other =>
         other.columns.some(c => c.isForeignKey && c.references?.toLowerCase().startsWith(`${table.name.toLowerCase()}.`))
       );
@@ -92,7 +92,7 @@ export function runErdLinter(tables: ErdTable[], features: FeatureSpec[]): Linte
     }
   });
 
-  // 3. Feature Mappings check
+  // [ERD 린터] 3. 기능 매핑 검사
   const mappedFeatureIds = new Set<string>();
   tables.forEach(t => t.relatedFeatureIds.forEach(fid => mappedFeatureIds.add(fid)));
 

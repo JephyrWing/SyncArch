@@ -1,14 +1,14 @@
 import type { ErdTable, ExportSettings, SqlDialect } from '../types/index.ts';
 
 /**
- * Topologically sorts tables based on foreign key references.
- * Parent tables (which are referenced) appear BEFORE child tables (which reference them).
+ * [SQL 생성] FK 참조를 기준으로 테이블을 위상 정렬한다.
+ * 참조되는 부모 테이블이 참조하는 자식 테이블보다 먼저 온다.
  */
 export function sortTablesTopologically(tables: ErdTable[]): ErdTable[] {
   const tableMap = new Map<string, ErdTable>();
   tables.forEach(t => tableMap.set(t.name.toLowerCase(), t));
 
-  // Build dependency graph: table -> array of parent table names it references
+  // [SQL 생성] 의존 그래프 구성: 테이블 -> 참조하는 부모 테이블 이름 배열
   const dependencies = new Map<string, Set<string>>();
   tables.forEach(t => {
     const parentSet = new Set<string>();
@@ -30,7 +30,7 @@ export function sortTablesTopologically(tables: ErdTable[]): ErdTable[] {
   function visit(tableName: string) {
     if (visited.has(tableName)) return;
     if (visiting.has(tableName)) {
-      // Cycle detected, break cycle gracefully
+      // [SQL 생성] 순환 참조를 발견하면 멈추지 않고 순환을 끊는다
       return;
     }
     visiting.add(tableName);
@@ -54,7 +54,7 @@ export function sortTablesTopologically(tables: ErdTable[]): ErdTable[] {
 
   tables.forEach(t => visit(t.name.toLowerCase()));
 
-  // In case any table wasn't included (e.g. orphan)
+  // [SQL 생성] 빠진 테이블이 있으면 추가한다(예: 고립 테이블)
   tables.forEach(t => {
     if (!sorted.some(s => s.id === t.id)) {
       sorted.push(t);
@@ -65,7 +65,7 @@ export function sortTablesTopologically(tables: ErdTable[]): ErdTable[] {
 }
 
 /**
- * Maps standard data types to dialect specific types
+ * [SQL 생성] 표준 데이터 타입을 DBMS별 타입으로 바꾼다
  */
 function mapDataType(type: string, dialect: SqlDialect): string {
   const upper = type.toUpperCase().trim();
@@ -122,7 +122,7 @@ function mapDataType(type: string, dialect: SqlDialect): string {
 }
 
 /**
- * Generates SQL DDL or Prisma Schema based on options and selected DBMS
+ * [SQL 생성] 옵션과 선택한 DBMS에 맞춰 SQL DDL 또는 Prisma 스키마를 만든다
  */
 export function generateSql(tables: ErdTable[], settings: ExportSettings): string {
   if (tables.length === 0) return '-- 정의된 테이블이 없습니다.';
@@ -155,7 +155,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
     lines.push(`PRAGMA foreign_keys = ON;\n`);
   }
 
-  // 1. Drop existing tables
+  // [SQL 생성] 1. 기존 테이블 삭제
   if (settings.includeDropTable) {
     lines.push(`-- 1. DROP EXISTING TABLES (Reverse Dependency Order)`);
     const reverseTables = [...sortedTables].reverse();
@@ -177,7 +177,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
     }
   }
 
-  // 2. Create tables
+  // [SQL 생성] 2. 테이블 생성
   lines.push(`-- 2. CREATE TABLES`);
   sortedTables.forEach(table => {
     const tableName = settings.dialect === 'oracle' ? table.name.toUpperCase() : table.name;
@@ -220,14 +220,14 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
         def += ` DEFAULT ${defaultVal}`;
       }
 
-      // MySQL/MariaDB inline comment support
+      // [SQL 생성] MySQL/MariaDB 인라인 COMMENT 지원
       if ((settings.dialect === 'mysql' || settings.dialect === 'mariadb') && settings.includeComments && col.comment) {
         def += ` COMMENT '${col.comment.replace(/'/g, "\\'")}'`;
       }
 
       colDefinitions.push(def);
 
-      // Foreign key
+      // [SQL 생성] 외래 키
       if (settings.includeForeignKeys && col.isForeignKey && col.references) {
         const [refTableRaw, refColRaw] = col.references.split('.');
         const refTable = settings.dialect === 'oracle' ? refTableRaw.toUpperCase() : refTableRaw;
@@ -248,12 +248,12 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
       }
     });
 
-    // Primary key constraint
+    // [SQL 생성] 기본 키 제약
     if (pkCols.length > 0) {
       colDefinitions.push(`    CONSTRAINT pk_${tableName} PRIMARY KEY (${pkCols.join(', ')})`);
     }
 
-    // Append foreign keys
+    // [SQL 생성] 외래 키 추가
     colDefinitions.push(...fkConstraints);
 
     lines.push(colDefinitions.join(',\n'));
@@ -268,7 +268,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
       lines.push(`);\n`);
     }
 
-    // PostgreSQL & Oracle Comments
+    // [SQL 생성] PostgreSQL·Oracle 주석
     if ((settings.dialect === 'postgres' || settings.dialect === 'oracle') && settings.includeComments) {
       if (table.comment) {
         lines.push(`COMMENT ON TABLE ${tableName} IS '${table.comment.replace(/'/g, "''")}';`);
@@ -287,7 +287,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
     }
   });
 
-  // 3. Indexes
+  // [SQL 생성] 3. 인덱스
   if (settings.includeIndexes) {
     lines.push(`-- 3. CREATE PERFORMANCE & FOREIGN KEY INDEXES`);
     sortedTables.forEach(table => {
@@ -320,7 +320,7 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings): strin
 }
 
 /**
- * Generates Prisma Schema DSL
+ * [SQL 생성] Prisma 스키마 DSL을 만든다
  */
 function generatePrismaSchema(tables: ErdTable[]): string {
   const lines: string[] = [];
