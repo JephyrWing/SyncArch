@@ -31,11 +31,13 @@ export const SaveStatusBadge: React.FC<{ status: SaveStatus; version: number }> 
 };
 
 interface CollabBannerProps {
+  suspended?: boolean;
   status: SaveStatus;
   message: string;
   onRetry: () => void;
   onBackup: () => void;
   onReloadLatest: () => void;
+  onReconnect: () => void;
 }
 
 const Button: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
@@ -48,7 +50,7 @@ const Button: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ 
 );
 
 /** [협업 상태] 저장 문제를 알린다. 팀원 변경은 자동으로 합쳐지므로 여기서는 저장 실패만 다룬다. */
-export const CollabBanner: React.FC<CollabBannerProps> = ({ status, message, onRetry, onBackup, onReloadLatest }) => {
+export const CollabBanner: React.FC<CollabBannerProps> = ({ status, message, onRetry, onBackup, onReloadLatest, onReconnect, suspended }) => {
   const backup = (
     <Button onClick={onBackup}>
       <Download className="h-3 w-3" />내 변경 백업(JSON)
@@ -59,7 +61,7 @@ export const CollabBanner: React.FC<CollabBannerProps> = ({ status, message, onR
   let actions: React.ReactNode = null;
   if (status === 'failed') {
     tone = 'bg-rose-950/80 text-rose-200 border-rose-800';
-    actions = <><Button onClick={onRetry}><RefreshCw className="h-3 w-3" />다시 시도</Button>{backup}</>;
+    actions = <>{!suspended && <Button onClick={onRetry}><RefreshCw className="h-3 w-3" />다시 시도</Button>}{backup}</>;
   } else if (status === 'invalid') {
     tone = 'bg-amber-950/80 text-amber-200 border-amber-800';
   } else if (status === 'error') {
@@ -70,6 +72,7 @@ export const CollabBanner: React.FC<CollabBannerProps> = ({ status, message, onR
   } else {
     return null;
   }
+  if (suspended) actions = <>{status === 'failed' && backup}<Button onClick={onReconnect}><RefreshCw className="h-3 w-3" />다시 연결</Button></>;
 
   return (
     <div role="alert" className={`flex flex-wrap items-center gap-2 border-b px-3 py-1.5 text-xs ${tone}`}>

@@ -45,6 +45,10 @@ export const startGoogleLogin = async (): Promise<string> =>
 
 export const logout = (): Promise<void> => authClient.logout();
 
+/** [구글 로그인] 인증메일 없이 현재 계정의 비밀번호를 다시 확인하고 주소를 직접 저장한다. */
+export const saveEmail = async (email: string, password: string): Promise<string> =>
+  (await request<{ email: string }>('POST', '/api/auth/email', { email, password })).data!.email;
+
 export const listProjects = async (): Promise<ProjectSummary[]> =>
   (await request<ProjectSummary[]>('GET', '/api/projects')).data!;
 
