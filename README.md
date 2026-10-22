@@ -604,3 +604,11 @@ Markdown은 접힌 아이디어·결정 사유·원본 기능 연결·노드/통
 선택 검사는 공통 runner에 `PYTEST_ADDOPTS='-k "exports_browser or integration_recovery"'`를
 지정합니다. 전체 검사는 이 환경변수를 지운 뒤 실행합니다. Google provider fixture와
 실제 Google 동의·공개 HTTPS/배포 검증 결과는 구분합니다.
+
+채팅은 `since` 시각과 `afterId` UUID로 같은 시각의 200개 초과 메시지도 이어 읽습니다.
+제품은 한 주기에 최대 5페이지를 처리한 뒤 다음 폴링에서 계속합니다. 새 전송의 `messageId`는
+기존 메시지 PK로 쓰며, 응답 유실 후 같은 ID/본문을 다시 보내면 최초 메시지를 반환합니다.
+다른 작성자·프로젝트·본문으로 같은 ID를 재사용하면 409입니다. ID 없는 기존 API 호출은
+계속 지원합니다. DB 스키마 변경은 없습니다. 관련 API·동시성 검사는 `test_message_recovery.py`에 있습니다.
+동시에 실행하는 검사가 기존 빌드를 사용 중이면 Vite `--outDir`로 별도 빌드를 만든 뒤
+`TEST_FRONTEND_DIST`에 절대 경로를 지정할 수 있습니다. 이는 pytest의 앱 설정에만 적용됩니다.
