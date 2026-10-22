@@ -20,9 +20,11 @@ MariaDB에서 실행한다. 각 단계는 선택한 테스트 1건 이상, skip/
 요구하며 pytest 실패 코드를 전파한다. 증빙 업로드만 always()로 실행한다.
 
 develop과 PR에서는 배포하지 않는다. main push의 같은 워크플로에서 네 체크가
-모두 성공해야 배포 job이 시작한다. 전체 40자리 커밋 SHA를 Cloudtype
-context.git.ref로 지정한다. 무료 Git 소스 배포를 사용하며 Cloudtype가 같은 커밋에서
-Dockerfile을 다시 빌드한다. GHCR push/pull과 비공개 레지스트리 구독은 사용하지 않는다.
+모두 성공해야 배포 job이 시작한다. 사용자 요청에 따라 두 서비스의 Cloudtype
+context.git.ref는 main 브랜치로 유지한다. 검사한 전체 40자리 SHA는 RELEASE_SHA로
+기록하고 공개 응답과 대조한다. 배포 직전 main head를 확인하지만 브랜치는 이동할 수
+있으므로 소스 체크아웃의 불변성을 보장하지 않는다. 무료 Git 소스 빌드를 사용하며
+GHCR push/pull과 비공개 레지스트리 구독은 사용하지 않는다.
 CI는 Nginx·Waitress 컨테이너를 실제 실행하고, Dockerfile의 프런트 재빌드 결과를
 검증한 production build의 파일별 SHA-256과 대조한다. Cloudtype의 재빌드 결과가
 CI 이미지와 동일하다고 보장하지는 않는다. 실제 공개 SHA·health·저장 smoke가 통과해야

@@ -27,7 +27,7 @@
         {"name": "JWT_REFRESH_TOKEN_EXPIRES", "secret": "JWT_REFRESH_TOKEN_EXPIRES"}
       ]
     },
-    "context": {"path": "/", "git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "SOURCE_SHA"}},
+    "context": {"path": "/", "git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "main"}},
     "resources": {"memory": 0.25, "replicas": 1}
   },
   {
@@ -39,7 +39,7 @@
       "start": "",
       "env": [{"name": "API_UPSTREAM", "value": "http://syncarch-api:5000"}]
     },
-    "context": {"path": "/", "git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "SOURCE_SHA"}},
+    "context": {"path": "/", "git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "main"}},
     "resources": {"memory": 0.25, "replicas": 1}
   }
 ]
