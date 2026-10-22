@@ -39,7 +39,7 @@ const describeFieldError = (error: ApiError, project: ProjectData | null): strin
   const table = match ? project?.tables[Number(match[1])] : undefined;
   const column = match?.[2] !== undefined ? table?.columns[Number(match[2])] : undefined;
   const where = table ? (column ? `${table.name}.${column.name}` : table.name) : first.path;
-  return `저장되지 않았습니다 — ${where}: ${first.reason} 값을 고치면 자동으로 다시 저장합니다.`;
+  return `저장되지 않았습니다 — ${where}: ${first.message ?? first.reason} 값을 고치면 자동으로 다시 저장합니다.`;
 };
 
 /**

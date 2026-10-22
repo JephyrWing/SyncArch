@@ -5,7 +5,7 @@ export interface ApiErrorDetail {
   code?: string;
   message?: string;
   currentVersion?: number;
-  fieldErrors?: { path: string; reason: string }[];
+  fieldErrors?: { path: string; message?: string; reason?: string }[];
 }
 
 export class ApiError extends Error {

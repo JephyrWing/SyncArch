@@ -21,6 +21,8 @@ export const EditDecisionModal: React.FC<EditDecisionModalProps> = ({
   const [editRationale, setEditRationale] = useState(editingCard.rationale || '');
   const [editDecisionReason, setEditDecisionReason] = useState(editingCard.decisionReason || '');
   const [editDecisionStatus, setEditDecisionStatus] = useState<DecisionStatus>(editingCard.decisionStatus || 'REVIEW');
+  // [아이디어 보드] 서버는 채택·보류에 결정 사유를 요구한다.
+  const reasonMissing = (editDecisionStatus === 'ACCEPTED' || editDecisionStatus === 'DEFERRED') && !editDecisionReason.trim();
   const [editDecidedBy, setEditDecidedBy] = useState(editingCard.decidedBy || teamMembers[0]?.name || '현우');
 
   const handleSaveEditModal = (e: React.FormEvent) => {
@@ -135,7 +137,9 @@ export const EditDecisionModal: React.FC<EditDecisionModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 shadow"
+              disabled={reasonMissing}
+              title={reasonMissing ? '채택·보류에는 결정 사유가 필요합니다' : undefined}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white flex items-center gap-1.5 shadow"
             >
               <Check className="w-3.5 h-3.5" />
               <span>사유 &amp; 의사결정 저장</span>

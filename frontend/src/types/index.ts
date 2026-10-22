@@ -180,6 +180,8 @@ export interface ProjectData {
   currentArchVersionId?: string;
   tables: ErdTable[];
   updatedAt: string;
+  // [문서 저장] 서버가 읽기 전용으로 보존하는 호환 필드의 원본. 저장할 때 이 값을 그대로 돌려보낸다.
+  compat?: Pick<DocumentPayload, 'stepLocks' | 'archVersions' | 'currentArchVersionId'>;
 }
 
 // [API 통신] 서버 API 형태(02 설계 API 정의서). 공유 문서 payload에는 개인 화면 상태를 넣지 않는다.

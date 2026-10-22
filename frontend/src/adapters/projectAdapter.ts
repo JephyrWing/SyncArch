@@ -27,6 +27,11 @@ export const toProjectData = (view: DocumentView, currentStep: StepNumber): Proj
   archVersions: view.payload.archVersions ?? [],
   currentArchVersionId: view.payload.currentArchVersionId,
   updatedAt: view.updatedAt,
+  compat: Object.fromEntries(
+    (['stepLocks', 'archVersions', 'currentArchVersionId'] as const)
+      .filter((key) => key in view.payload)
+      .map((key) => [key, view.payload[key]])
+  ),
 });
 
 /** [문서 저장] 공유 필드만 담는다. currentStep 같은 화면 상태는 개인별로 둔다(02 VIEW 02). */
@@ -37,9 +42,9 @@ export const toPayload = (project: ProjectData): DocumentPayload => ({
   nodes: project.nodes,
   connections: project.connections,
   tables: project.tables,
-  stepLocks: project.stepLocks,
-  archVersions: project.archVersions,
-  ...(project.currentArchVersionId ? { currentArchVersionId: project.currentArchVersionId } : {}),
+  // shortcut: 서버 계약은 stepLocks·archVersions·currentArchVersionId 변경을 거절한다(document_validation COMPATIBILITY).
+  // Step 잠금과 아키텍처 버전은 이 화면에서만 유지된다. 서버가 저장을 지원하면 project 값을 보내도록 되돌린다.
+  ...(project.compat ?? {}),
 });
 
 export const toSaveBody = (project: ProjectData, baseVersion: number, mutationId: string): SaveDocumentBody => ({

@@ -15,13 +15,15 @@ export const NewIdeaForm: React.FC<NewIdeaFormProps> = ({ teamMembers, isLocked,
   const [newDescription, setNewDescription] = useState('');
   const [newRationale, setNewRationale] = useState('');
   const [newDecisionReason, setNewDecisionReason] = useState('');
-  const [newDecisionStatus, setNewDecisionStatus] = useState<DecisionStatus>('ACCEPTED');
+  const [newDecisionStatus, setNewDecisionStatus] = useState<DecisionStatus>('REVIEW');
+  // [아이디어 보드] 서버는 채택·보류에 결정 사유를 요구한다.
+  const reasonMissing = (newDecisionStatus === 'ACCEPTED' || newDecisionStatus === 'DEFERRED') && !newDecisionReason.trim();
   const [selectedAuthor, setSelectedAuthor] = useState(teamMembers[0]?.name || '현우');
 
   const handleCreateCard = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (isLocked) return;
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || reasonMissing) return;
 
     onAddCard({
       category: selectedCategory,
@@ -164,7 +166,7 @@ export const NewIdeaForm: React.FC<NewIdeaFormProps> = ({ teamMembers, isLocked,
         <div className="flex justify-end pt-1">
           <button
             type="submit"
-            disabled={isLocked || !newTitle.trim()}
+            disabled={isLocked || !newTitle.trim() || reasonMissing}
             className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded text-xs font-bold flex items-center gap-1 shadow-sm transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
