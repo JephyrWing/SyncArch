@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* [공통 화면] 기본 스크롤바와 폼 컨트롤도 다크 테마를 따른다. */
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #020617;
+  color: #f8fafc;
+  /* [공통 화면] 한국어는 단어 중간이 아니라 단어 경계에서 줄바꿈한다. 띄어쓰기 없는 긴 문자열은 그래도 줄바꿈될 수 있다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}

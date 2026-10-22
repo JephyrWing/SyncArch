@@ -1,0 +1,12 @@
+.git
+.local
+**/node_modules
+frontend/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.env
+**/.env.*
+**/instance
+**/*.log
+**/*.sql

@@ -1,0 +1,45 @@
+[
+  {
+    "name": "syncarch-api",
+    "app": "dockerfile",
+    "options": {
+      "dockerfile": "deploy/backend/Dockerfile",
+      "ports": 5000,
+      "start": "",
+      "env": [
+        {"name": "APP_ENV", "secret": "APP_ENV"},
+        {"name": "FLASK_DEBUG", "secret": "FLASK_DEBUG"},
+        {"name": "SECRET_KEY", "secret": "SECRET_KEY"},
+        {"name": "JWT_SECRET_KEY", "secret": "JWT_SECRET_KEY"},
+        {"name": "DB_HOST", "secret": "DB_HOST"},
+        {"name": "DB_PORT", "secret": "DB_PORT"},
+        {"name": "DB_NAME", "secret": "DB_NAME"},
+        {"name": "DB_USER", "secret": "DB_USER"},
+        {"name": "DB_PASSWORD", "secret": "DB_PASSWORD"},
+        {"name": "REDIS_URL", "secret": "REDIS_URL"},
+        {"name": "TRUSTED_HOSTS", "secret": "TRUSTED_HOSTS"},
+        {"name": "ALLOWED_ORIGINS", "secret": "ALLOWED_ORIGINS"},
+        {"name": "GOOGLE_OAUTH_ENABLED", "secret": "GOOGLE_OAUTH_ENABLED"},
+        {"name": "GOOGLE_CLIENT_ID", "secret": "GOOGLE_CLIENT_ID"},
+        {"name": "GOOGLE_CLIENT_SECRET", "secret": "GOOGLE_CLIENT_SECRET"},
+        {"name": "GOOGLE_REDIRECT_URI", "secret": "GOOGLE_REDIRECT_URI"},
+        {"name": "JWT_ACCESS_TOKEN_EXPIRES", "secret": "JWT_ACCESS_TOKEN_EXPIRES"},
+        {"name": "JWT_REFRESH_TOKEN_EXPIRES", "secret": "JWT_REFRESH_TOKEN_EXPIRES"}
+      ]
+    },
+    "context": {"path": "/", "git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "SOURCE_SHA"}},
+    "resources": {"memory": 0.25, "replicas": 1}
+  },
+  {
+    "name": "syncarch-web",
+    "app": "dockerfile",
+    "options": {
+      "dockerfile": "deploy/frontend/Dockerfile",
+      "ports": 8080,
+      "start": "",
+      "env": [{"name": "API_UPSTREAM", "value": "http://syncarch-api:5000"}]
+    },
+    "context": {"path": "/", "git": {"url": "https://github.com/JephyrWing/SyncArch.git", "ref": "SOURCE_SHA"}},
+    "resources": {"memory": 0.25, "replicas": 1}
+  }
+]

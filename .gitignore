@@ -1,8 +1,90 @@
-node_modules/
+# 로컬 사용자별 에이전트 작업 지침은 저장소에 포함하지 않는다.
+/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+
+# 실제 접속 정보와 개인 비밀값은 제외하고 공유용 환경변수 예제는 유지한다.
+.env*
+*.env
+!.env.example
+!.env.*.example
+!*.env.example
+.secrets/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python 실행 환경, 바이트코드와 패키징 산출물
+__pycache__/
+*.py[cod]
+*.pyd
+.venv/
+venv/
+env/
+.python/
+.Python
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+wheels/
 build/
 dist/
+
+# 타입 검사, 정적 분석과 테스트 캐시
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.tox/
+.nox/
+.cache/
+
+# npm 의존성, Vite 캐시와 이전 Express 서버의 생성 파일
+node_modules/
+.npm/
+.vite/
+.vite-temp/
+*.tsbuildinfo
+/frontend/server.js
+
+# 검사 결과와 브라우저 인증 상태는 소스·테스트 코드와 분리한다.
 coverage/
-.DS_Store
+.coverage
+.coverage.*
+htmlcov/
+test-results/
+playwright-report/
+blob-report/
+**/playwright/.cache/
+**/playwright/.auth/
+/frontend/dropdown-test.png
+
+# Flask 로컬 상태, 격리 DB·도구·검증 증빙과 실행 중 생성 파일
+/backend/instance/
+/.local/
+/backend/.local/
+/backups/
+/backend/backups/
+/logs/
 *.log
-.env*
-!.env.example
+*.pid
+*.pid.lock
+
+# AI Studio의 생성 도구 임시 산출물은 실행 소스에 포함하지 않는다.
+.aistudio/
+
+# 개인 IDE 설정과 운영체제 임시 파일; 팀 공유 VS Code 설정은 허용한다.
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+AGENTS.md
