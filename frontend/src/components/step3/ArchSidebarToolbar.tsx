@@ -30,7 +30,7 @@ export const ArchSidebarToolbar: React.FC<ArchSidebarToolbarProps> = ({
   onChangeFilterLayer,
 }) => (
   <div className="p-3 border-b border-slate-800 bg-slate-900/90 shrink-0 space-y-2">
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
       <div>
         <div className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
           <Network className="w-4 h-4" />

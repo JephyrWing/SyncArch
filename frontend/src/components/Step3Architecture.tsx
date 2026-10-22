@@ -114,6 +114,7 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* [시스템 아키텍처] 왼쪽 패널: 크기 조절 컴포넌트 목록과 필터 */}
         <div
+          aria-label="아키텍처 편집 패널"
           style={isDesktop ? { width: `${sidebarWidth}%` } : undefined}
           className={`border-r border-slate-800 bg-slate-900/70 flex flex-col h-full overflow-hidden shrink-0 ${
             isDesktop ? 'flex' : (mobileTab === 'editor' ? 'w-full flex' : 'hidden')
@@ -170,7 +171,7 @@ export const Step3Architecture: React.FC<Step3ArchitectureProps> = ({
           onMouseDown={onStartResize}
           onDoubleClick={onResetResize}
           className="hidden lg:flex w-1.5 hover:w-2 bg-slate-800 hover:bg-indigo-500 cursor-col-resize transition-all items-center justify-center shrink-0 group z-10 select-none"
-          title="드래그하여 사이드바 너비 조절 (더블클릭 시 40% 리셋)"
+          title="드래그하여 사이드바 너비 조절 (더블클릭 시 30% 리셋)"
         >
           <div className="w-0.5 h-8 bg-slate-600 group-hover:bg-white rounded-full transition-colors" />
         </div>

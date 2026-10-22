@@ -212,13 +212,25 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
       return 40;
     }
   });
+  // 아키텍처는 캔버스 공간을 넓히고, 다른 Step의 개인 너비 설정과 분리한다.
+  const [architectureSidebarWidth, setArchitectureSidebarWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('syncarch_architecture_sidebar_width'));
+      return Number.isFinite(saved) && saved > 0 ? Math.min(65, Math.max(20, saved)) : 30;
+    } catch {
+      return 30;
+    }
+  });
+  const activeSidebarWidth = currentStep === 3 ? architectureSidebarWidth : sidebarWidth;
+  const setActiveSidebarWidth = currentStep === 3 ? setArchitectureSidebarWidth : setSidebarWidth;
+  const sidebarStorageKey = currentStep === 3 ? 'syncarch_architecture_sidebar_width' : 'syncarch_sidebar_width';
   const [mobileTab, setMobileTab] = useState<'editor' | 'canvas'>('editor');
 
   // [공통 화면] 드래그 크기 조절 처리
   const handleStartResize = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startWidth = sidebarWidth;
+    const startWidth = activeSidebarWidth;
     let latestWidth = startWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -227,12 +239,12 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
       const deltaPercent = (deltaX / totalWidth) * 100;
       const newWidth = Math.min(65, Math.max(20, startWidth + deltaPercent));
       latestWidth = newWidth;
-      setSidebarWidth(newWidth);
+      setActiveSidebarWidth(newWidth);
     };
 
     const handleMouseUp = () => {
       try {
-        localStorage.setItem('syncarch_sidebar_width', latestWidth.toString());
+        localStorage.setItem(sidebarStorageKey, latestWidth.toString());
       } catch {}
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -248,9 +260,10 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   };
 
   const handleResetSidebarWidth = () => {
-    setSidebarWidth(40);
+    const defaultWidth = currentStep === 3 ? 30 : 40;
+    setActiveSidebarWidth(defaultWidth);
     try {
-      localStorage.setItem('syncarch_sidebar_width', '40');
+      localStorage.setItem(sidebarStorageKey, defaultWidth.toString());
     } catch {}
   };
 
@@ -814,7 +827,7 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
             onUpdateConnection={handleUpdateConnection}
             onDeleteConnection={handleDeleteConnection}
             isLocked={currentProject.stepLocks[3]}
-            sidebarWidth={sidebarWidth}
+            sidebarWidth={architectureSidebarWidth}
             onStartResize={handleStartResize}
             onResetResize={handleResetSidebarWidth}
             mobileTab={mobileTab}
