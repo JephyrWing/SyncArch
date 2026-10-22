@@ -867,15 +867,11 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
 
       {/* [명세서 생성] 현재 프로젝트 DBMS를 쓰는 내보내기 모달(SQL DDL / Markdown) */}
       <ExportModal
+        key={currentProject.id}
+        projectId={currentProject.id}
+        exportAllowed={doc.status === 'clean' || doc.status === 'readonly'}
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
-        projectTitle={currentProject.title}
-        projectSummary={currentProject.summary}
-        ideas={currentProject.ideas}
-        features={currentProject.features}
-        nodes={currentProject.nodes}
-        connections={currentProject.connections}
-        tables={currentProject.tables}
         defaultDbms={previewDbms}
       />
 

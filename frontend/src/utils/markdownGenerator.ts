@@ -1,6 +1,7 @@
 import type { IdeaCard, FeatureSpec, ArchNode, ArchConnection, ErdTable } from '../types/index.ts';
 import { voteCount } from './votes.ts';
 import { featureCode, featureCodeOf } from './features.ts';
+import { columnTypeExpression } from './mariadbTypes.ts';
 
 export function generateMarkdownSpec(
   title: string,
@@ -9,15 +10,18 @@ export function generateMarkdownSpec(
   features: FeatureSpec[],
   nodes: ArchNode[],
   connections: ArchConnection[],
-  tables: ErdTable[]
+  tables: ErdTable[],
+  metadata?: { version: number; generatedAt: string }
 ): string {
   const lines: string[] = [];
+  const cell = (value: unknown) => String(value ?? '').replace(/\r?\n/g, '<br>').replace(/\|/g, '\\|');
+  if (metadata) lines.push(`<!-- SyncArch saved version: ${metadata.version}; generatedAt: ${metadata.generatedAt} -->`);
 
   lines.push(`# 🏛️ ${title || 'SyncArch 프로젝트 아키텍처 명세서'}`);
   lines.push(`> **문서 생성일:** ${new Date().toLocaleDateString('ko-KR')} | **설계 도구:** SyncArch Studio (5인 애자일 팀 협업 스위트)\n`);
 
   lines.push(`## 0. 프로젝트 개요`);
-  lines.push(`- **한 줄 요약:** ${summary || '사내 스터디 매칭 & 출석 관리 플랫폼'}`);
+  lines.push(`- **한 줄 요약:** ${summary || '작성된 요약 없음'}`);
   lines.push(`- **설계 완료 단계:** Step 1 (아이디어) → Step 2 (기능/API) → Step 3 (시스템 아키텍처) → Step 4 (DB ERD)\n`);
 
   // [명세서 생성] Step 1
@@ -35,7 +39,7 @@ export function generateMarkdownSpec(
 
   cards.forEach(card => {
     const cat = categoryLabels[card.category] || card.category;
-    lines.push(`| ${cat} | **${card.title}** | ${card.description} | ${card.author} | ⭐ ${voteCount(card)}표 |`);
+    lines.push(`| ${cat} | **${cell(card.title)}** | ${cell(card.description)} | ${cell(card.author)} | ⭐ ${voteCount(card)}표 |`);
   });
   lines.push('');
 
@@ -56,30 +60,33 @@ export function generateMarkdownSpec(
   lines.push(`| :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |`);
 
   features.forEach(f => {
-    lines.push(`| **${featureCode(f)}** | ${f.domain} | ${f.name} | \`${f.priority}\` | ${f.assignee} | \`${f.method}\` | \`${f.endpoint}\` | ${f.requestFields} → ${f.responseFields} |`);
+    lines.push(`| **${cell(featureCode(f))}** | ${cell(f.domain)} | ${cell(f.name)} | \`${f.priority}\` | ${cell(f.assignee)} | \`${f.method}\` | \`${cell(f.endpoint)}\` | ${cell(f.requestFields)} → ${cell(f.responseFields)} |`);
   });
   lines.push('');
 
   lines.push(`### 2.1 API 호출 & 유저 플로우 다이어그램 (Mermaid)`);
   lines.push('```mermaid');
   lines.push('flowchart TD');
-  lines.push('    Start([사용자 진입]) --> Auth[FEAT-01: 사내 SSO 로그인]');
-  features.forEach(f => {
-    if (f.id !== 'FEAT-01') {
-      lines.push(`    Auth --> ${f.id.replace('-', '')}["[${f.method}] ${f.name} (${f.endpoint})"]`);
-    }
+  lines.push('    Start([사용자 진입])');
+  const label = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/[\r\n]/g, ' ');
+  features.forEach((f, index) => {
+    lines.push(`    Start --> feature_${index}["${label(`[${f.method}] ${f.name} (${f.endpoint})`)}"]`);
   });
   lines.push('```\n');
+  lines.push('### 2.2 기능과 원본 아이디어 연결');
+  lines.push('| 기능 ID | 표시 코드 | 원본 아이디어 ID |');
+  lines.push('| :--- | :--- | :--- |');
+  features.forEach(f => lines.push(`| ${f.id} | ${cell(featureCode(f))} | ${f.relatedStoryId ?? '-'} |`));
 
   // [명세서 생성] Step 3
   lines.push(`---`);
   lines.push(`## 3. 시스템 아키텍처 설계 (Step 3)`);
   lines.push(`### 3.1 아키텍처 컴포넌트 목록`);
-  lines.push(`| 카테고리 | 컴포넌트 명 | 기술 스택 | 설명 |`);
-  lines.push(`| :---: | :--- | :--- | :--- |`);
+  lines.push(`| 카테고리 | 컴포넌트 명 | 기술 스택 | 설명 | ID | 담당 조직 | 좌표 |`);
+  lines.push(`| :---: | :--- | :--- | :--- | :--- | :--- | :--- |`);
 
   nodes.forEach(n => {
-    lines.push(`| **${n.category}** | **${n.name}** | \`${n.techStack.join(', ')}\` | ${n.description} |`);
+    lines.push(`| **${n.category}** | **${cell(n.name)}** | \`${cell(n.techStack.join(', '))}\` | ${cell(n.description)} | ${n.id} | ${cell(n.assignedTeam)} | ${n.x}, ${n.y} |`);
   });
   lines.push('');
 
@@ -124,6 +131,10 @@ export function generateMarkdownSpec(
   });
 
   lines.push('```\n');
+  lines.push('### 3.3 통신 연결 속성');
+  lines.push('| 연결 ID | 시작 노드 | 대상 노드 | 프로토콜 | 이름 | 설명 |');
+  lines.push('| :--- | :--- | :--- | :--- | :--- | :--- |');
+  connections.forEach(c => lines.push(`| ${c.id} | ${c.sourceId} | ${c.targetId} | ${c.protocol} | ${cell(c.label)} | ${cell(c.description)} |`));
 
   // [명세서 생성] Step 4
   lines.push(`---`);
@@ -138,7 +149,7 @@ export function generateMarkdownSpec(
 
     table.columns.forEach(col => {
       lines.push(
-        `| **${col.name}** | \`${col.dataType}\` | ${col.isPrimaryKey ? '🔑 PK' : '-'} | ${col.isForeignKey ? `🔗 \`${col.references}\`` : '-'} | ${col.isNullable ? 'YES' : 'NO'} | ${col.isUnique ? 'UNIQUE' : '-'} | ${col.defaultValue || '-'} | ${col.comment} |`
+        `| **${col.name}** | \`${columnTypeExpression(col)}\` | ${col.isPrimaryKey ? '🔑 PK' : '-'} | ${col.isForeignKey ? `🔗 \`${col.references}\`` : '-'} | ${col.isNullable ? 'YES' : 'NO'} | ${col.isUnique ? 'UNIQUE' : '-'} | ${cell(col.defaultValue || '-')} | ${cell(col.comment)} |`
       );
     });
     lines.push('');
