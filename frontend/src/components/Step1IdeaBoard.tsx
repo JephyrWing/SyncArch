@@ -121,7 +121,7 @@ export const Step1IdeaBoard: React.FC<Step1IdeaBoardProps> = ({
         {/* [아이디어 보드] 왼쪽 패널: 근거와 결정 기록이 있는 크기 조절 편집기 */}
         <div
           style={isDesktop ? { width: `${sidebarWidth}%` } : undefined}
-          className={`border-r border-slate-800 bg-slate-900/70 flex flex-col h-full overflow-hidden shrink-0 ${
+          className={`border-r border-slate-800 bg-slate-900/70 flex flex-col h-full overflow-y-auto lg:overflow-hidden shrink-0 ${
             isDesktop ? 'flex' : (mobileTab === 'editor' ? 'w-full flex' : 'hidden')
           }`}
         >

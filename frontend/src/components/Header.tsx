@@ -351,7 +351,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => onChangeStep(st.num)}
               aria-label={st.fullLabel}
               title={st.fullLabel}
-              className={`relative flex-1 lg:flex-none justify-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
+              className={`relative flex-1 lg:flex-none justify-center px-2 sm:px-3 py-2.5 lg:py-1.5 rounded-lg text-sm lg:text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0 ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
@@ -427,7 +427,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* [명세서 생성] 내보내기 모달 열기 버튼 */}
         <button
           onClick={onOpenExport}
-          aria-label="내보내기"
+          aria-label="내보내기 (SQL / MD)"
           className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
         >
           <Download className="w-3.5 h-3.5" />
@@ -438,7 +438,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* [프로젝트] 새 프로젝트 등록 모달 */}
       {showNewProjectModal && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 text-xs text-slate-100">
             <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">

@@ -50,7 +50,7 @@ export const AccountSettings: React.FC<{ canNavigate?: () => boolean }> = ({ can
         <Mail className="h-3.5 w-3.5" /><span className="hidden 2xl:inline">이메일</span>
       </button>
       {open && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-2 sm:p-4">
           <section role="dialog" aria-modal="true" aria-labelledby="email-settings-title" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 text-sm text-slate-100 shadow-2xl">
             <header className="mb-3 flex items-center justify-between">
               <h2 id="email-settings-title" className="font-bold">이메일 등록/수정</h2>

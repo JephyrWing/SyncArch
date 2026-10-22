@@ -50,6 +50,7 @@ export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess }
         }}
         className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20"
         title="팀원에게 보낼 초대 코드"
+        aria-label="초대 코드"
         aria-expanded={open}
       >
         <KeyRound className="h-3.5 w-3.5" />
