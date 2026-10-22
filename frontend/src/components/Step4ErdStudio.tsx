@@ -167,6 +167,7 @@ export const Step4ErdStudio: React.FC<Step4ErdStudioProps> = ({
             <TableDetail
               table={selectedTable}
               tables={tables}
+              features={features}
               isLocked={isLocked}
               onRenameTable={onRenameTable}
               onDeleteTable={onDeleteTable}

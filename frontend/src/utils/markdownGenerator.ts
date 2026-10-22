@@ -1,5 +1,6 @@
 import type { IdeaCard, FeatureSpec, ArchNode, ArchConnection, ErdTable } from '../types/index.ts';
 import { voteCount } from './votes.ts';
+import { featureCode, featureCodeOf } from './features.ts';
 
 export function generateMarkdownSpec(
   title: string,
@@ -45,7 +46,7 @@ export function generateMarkdownSpec(
   lines.push(`| :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |`);
 
   features.forEach(f => {
-    lines.push(`| **${f.id}** | ${f.domain} | ${f.name} | \`${f.priority}\` | ${f.assignee} | \`${f.method}\` | \`${f.endpoint}\` | ${f.requestFields} → ${f.responseFields} |`);
+    lines.push(`| **${featureCode(f)}** | ${f.domain} | ${f.name} | \`${f.priority}\` | ${f.assignee} | \`${f.method}\` | \`${f.endpoint}\` | ${f.requestFields} → ${f.responseFields} |`);
   });
   lines.push('');
 
@@ -120,7 +121,7 @@ export function generateMarkdownSpec(
   tables.forEach(table => {
     lines.push(`### 4.${tables.indexOf(table) + 1} 테이블: \`${table.name}\` (${table.comment})`);
     if (table.relatedFeatureIds.length > 0) {
-      lines.push(`> **연관 기능:** ${table.relatedFeatureIds.join(', ')}`);
+      lines.push(`> **연관 기능:** ${table.relatedFeatureIds.map((id) => featureCodeOf(features, id)).join(', ')}`);
     }
     lines.push(`| 컬럼명 | 데이터 타입 | PK | FK 참조 | Null 허용 | Unique | 기본값 | 설명 |`);
     lines.push(`| :--- | :--- | :---: | :--- | :---: | :---: | :--- | :--- |`);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Database, Plus, X } from 'lucide-react';
 import type { ErdColumn, ErdTable, FeatureSpec, SqlDialect } from '../../types/index.ts';
+import { featureCode } from '../../utils/features.ts';
 
 interface AddTableModalProps {
   open: boolean;
@@ -23,7 +24,7 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, ta
 
     const baseColumns: ErdColumn[] = [
       {
-        id: `col-id-${Date.now()}`,
+        id: crypto.randomUUID(),
         name: 'id',
         dataType: targetDbms === 'mysql' ? 'VARCHAR(36)' : 'UUID',
         isPrimaryKey: true,
@@ -33,7 +34,7 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, ta
         comment: '고유 식별자',
       },
       {
-        id: `col-created-${Date.now()}`,
+        id: crypto.randomUUID(),
         name: 'created_at',
         dataType: targetDbms === 'mysql' ? 'DATETIME(6)' : 'TIMESTAMPTZ',
         isPrimaryKey: false,
@@ -123,7 +124,7 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, ta
                       }}
                       className="rounded border-slate-700 text-indigo-500"
                     />
-                    <span className="font-mono text-[10px] text-indigo-400">[{feat.id}]</span>
+                    <span className="font-mono text-[10px] text-indigo-400">[{featureCode(feat)}]</span>
                     <span className="truncate">{feat.name}</span>
                   </label>
                 );

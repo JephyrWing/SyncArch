@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { ErdColumn, ErdTable } from '../../types/index.ts';
+import type { ErdColumn, ErdTable, FeatureSpec } from '../../types/index.ts';
+import { featureCodeOf } from '../../utils/features.ts';
 import { findReferences } from '../../utils/erdRename.ts';
 import { ColumnTable } from './ColumnTable.tsx';
 
@@ -9,6 +10,7 @@ const TABLE_NAME = /^[a-z_][a-z0-9_]{0,63}$/;
 interface TableDetailProps {
   table: ErdTable;
   tables: ErdTable[];
+  features: FeatureSpec[];
   isLocked: boolean;
   onRenameTable: (id: string, name: string) => void;
   onDeleteTable: (id: string) => void;
@@ -20,6 +22,7 @@ interface TableDetailProps {
 export const TableDetail: React.FC<TableDetailProps> = ({
   table: selectedTable,
   tables,
+  features,
   isLocked,
   onRenameTable,
   onDeleteTable,
@@ -149,7 +152,7 @@ export const TableDetail: React.FC<TableDetailProps> = ({
                 key={featId}
                 className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/50"
               >
-                {featId}
+                {featureCodeOf(features, featId)}
               </span>
             ))
           )}

@@ -34,6 +34,7 @@ import { usePresence } from './hooks/usePresence.ts';
 import { clearReferences, findReferences, renameColumn, renameTable } from './utils/erdRename.ts';
 import { isValidConnection } from './utils/architecture.ts';
 import { voteCount } from './utils/votes.ts';
+import { featureCode } from './utils/features.ts';
 import type {
   StepNumber,
   TeamMember,
@@ -71,7 +72,7 @@ export default function App() {
 
 // [기능 명세] 개수 + 1이 아니라 최댓값 + 1을 써서, FEAT-02를 지워도 다음 기능이 FEAT-03을 다시 쓰지 않게 한다(02 FEAT 03).
 const nextFeatureNumber = (features: FeatureSpec[]): number =>
-  Math.max(0, ...features.map((f) => Number(/^FEAT-(\d+)$/.exec(f.id)?.[1] ?? 0))) + 1;
+  Math.max(0, ...features.map((f) => Number(/^FEAT-(\d+)$/.exec(featureCode(f))?.[1] ?? 0))) + 1;
 
 function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => void }) {
   // [프로젝트] 프로젝트는 서버에서 받고, currentStep은 개인 화면 상태다(02 VIEW 02).
@@ -478,10 +479,10 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
 
   // [기능 명세] Step 2 처리
   const handleAddFeature = (feat: Omit<FeatureSpec, 'id'>) => {
-    const newId = `FEAT-${String(nextFeatureNumber(currentProject.features)).padStart(2, '0')}`;
     const newFeature: FeatureSpec = {
       ...feat,
-      id: newId,
+      id: crypto.randomUUID(),
+      displayCode: `FEAT-${String(nextFeatureNumber(currentProject.features)).padStart(2, '0')}`,
     };
     updateCurrentProject({ features: [...currentProject.features, newFeature] });
   };
@@ -508,7 +509,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
     highVoteIdeas.forEach((idea) => {
       if (!existingStoryIds.has(idea.id)) {
         newFeatures.push({
-          id: `FEAT-${String(count).padStart(2, '0')}`,
+          id: crypto.randomUUID(),
+          displayCode: `FEAT-${String(count).padStart(2, '0')}`,
           domain: idea.category === 'problems_goals' ? '정책' : idea.category === 'actors' ? '인증' : '비즈니스',
           name: idea.title,
           priority: 'P0',

@@ -88,6 +88,8 @@ def load_config():
         "JWT_CSRF_IN_COOKIES": False,
         "JWT_REFRESH_CSRF_HEADER_NAME": "X-CSRF-TOKEN",
         "REDIS_URL": redis_url,
+        # 선택 사항입니다. 저장할 때마다 이 폴더의 API 명세 엑셀을 최신본으로 바꿉니다.
+        "API_SPEC_EXPORT_DIR": os.getenv("API_SPEC_EXPORT_DIR", "").strip(),
         "REDIS_KEY_PREFIX": "syncarch:",
         "ALLOWED_ORIGINS": origins,
         "JSON_SORT_KEYS": False,

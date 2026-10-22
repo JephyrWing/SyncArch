@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2 } from 'lucide-react';
 import type { FeatureProgressStatus, FeatureSpec } from '../../types/index.ts';
 import { METHOD_COLORS, PRIORITY_BADGES, STATUS_BADGES } from './featureConfig.ts';
+import { featureCode } from '../../utils/features.ts';
 
 interface FeatureListProps {
   features: FeatureSpec[];
@@ -45,7 +46,7 @@ export const FeatureList: React.FC<FeatureListProps> = ({
             >
               <div className="flex items-start justify-between gap-1 mb-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-mono font-bold text-slate-400">{f.id}</span>
+                  <span className="text-[10px] font-mono font-bold text-slate-400">{featureCode(f)}</span>
                   <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${mColor.bg} ${mColor.text} ${mColor.border}`}>
                     {f.method}
                   </span>

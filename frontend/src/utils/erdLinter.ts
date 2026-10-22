@@ -1,4 +1,5 @@
 import type { ErdTable, FeatureSpec, LinterIssue } from '../types/index.ts';
+import { featureCode } from './features.ts';
 
 export function runErdLinter(tables: ErdTable[], features: FeatureSpec[]): LinterIssue[] {
   const issues: LinterIssue[] = [];
@@ -102,7 +103,7 @@ export function runErdLinter(tables: ErdTable[], features: FeatureSpec[]): Linte
         id: `feat-unmapped-${feat.id}`,
         type: 'feature_missing_table',
         severity: 'info',
-        title: `기능 [${feat.id}] 매핑 누락`,
+        title: `기능 [${featureCode(feat)}] 매핑 누락`,
         message: `'${feat.name}' 기능에 대응하는 DB 테이블이 명시적으로 매핑되지 않았습니다.`,
         autoFixType: 'map_feature',
       });
