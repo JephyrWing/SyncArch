@@ -6,6 +6,7 @@ import { featureCode } from '../../utils/features.ts';
 interface AddTableModalProps {
   open: boolean;
   features: FeatureSpec[];
+  tables: ErdTable[];
   targetDbms: SqlDialect;
   isLocked: boolean;
   onAddTable: (table: Omit<ErdTable, 'id'>) => void;
@@ -13,14 +14,18 @@ interface AddTableModalProps {
 }
 
 // [ERD 설계] 닫혀도 마운트를 유지해 다시 열 때 입력값이 남는다(분리 전 동작 유지).
-export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, targetDbms, isLocked, onAddTable, onClose }) => {
+export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, tables, targetDbms, isLocked, onAddTable, onClose }) => {
   const [newTableName, setNewTableName] = useState('');
   const [newTableComment, setNewTableComment] = useState('');
   const [newTableFeatures, setNewTableFeatures] = useState<string[]>([]);
+  const normalizedName = newTableName.trim().toLowerCase();
+  const nameError = !/^[a-z_][a-z0-9_]{0,63}$/.test(normalizedName)
+    ? '소문자·숫자·밑줄 64자 이하로 입력하세요.'
+    : tables.some((table) => table.name.toLowerCase() === normalizedName) ? '같은 이름의 테이블이 있습니다.' : '';
 
   const handleCreateTable = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTableName.trim() || isLocked) return;
+    if (nameError || isLocked) return;
 
     const baseColumns: ErdColumn[] = [
       {
@@ -89,6 +94,7 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, ta
               onChange={(e) => setNewTableName(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500 mt-1 font-mono"
             />
+            {newTableName && nameError && <p role="alert" className="mt-1 text-xs text-rose-300">{nameError}</p>}
           </div>
 
           <div>
@@ -142,7 +148,7 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({ open, features, ta
             </button>
             <button
               type="submit"
-              disabled={!newTableName.trim()}
+              disabled={isLocked || !!nameError}
               className="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1 shadow"
             >
               <Plus className="w-3.5 h-3.5" />

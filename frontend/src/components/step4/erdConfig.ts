@@ -1,19 +1,5 @@
 import type { SqlDialect } from '../../types/index.ts';
 
-export const COMMON_DATA_TYPES = [
-  'UUID',
-  'VARCHAR(50)',
-  'VARCHAR(100)',
-  'VARCHAR(255)',
-  'BIGINT',
-  'INTEGER',
-  'TIMESTAMPTZ',
-  'DATE',
-  'JSONB',
-  'BOOLEAN',
-  'TEXT',
-];
-
 export const DBMS_NAMES: Record<SqlDialect, { label: string; badge: string; color: string }> = {
   postgres: { label: 'PostgreSQL 16', badge: 'Postgres', color: 'border-sky-500 text-sky-300' },
   mysql: { label: 'MySQL 8.0', badge: 'MySQL', color: 'border-amber-500 text-amber-300' },
