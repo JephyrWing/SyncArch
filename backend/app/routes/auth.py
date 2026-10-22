@@ -11,8 +11,8 @@ from werkzeug.exceptions import BadRequest
 from ..auth import actor_from_claims, notify_session_revoked, token_repository
 from ..errors import AuthenticationRequired, CsrfFailed
 from ..extensions import db
-from ..schemas.auth_schema import parse_login
-from ..services.auth_service import authenticate, create_session, rotate_session, revoke_session
+from ..schemas.auth_schema import parse_login, parse_registration
+from ..services.auth_service import authenticate, create_session, register_user, rotate_session, revoke_session
 
 auth = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -44,6 +44,14 @@ def token_response(actor, access, refresh, claims):
                              "expiresIn": max(0, decode_token(access)["exp"] - int(time()))})
     set_refresh_cookies(response, refresh, max_age=max(0, claims["exp"] - int(time())))
     return response
+
+
+@auth.post("/register")
+def register():
+    if not request.is_json:
+        raise BadRequest("JSON 요청이 필요합니다.")
+    actor = register_user(db.session.session_factory, **parse_registration(request.get_json()))
+    return jsonify(data={"user": actor.public()}), 201
 
 
 @auth.post("/login")

@@ -297,8 +297,9 @@ def test_late_401_after_logout_and_new_login_is_not_replayed(browser_session):
         context.close()
 
 
-def test_vite_proxy_product_login_save_etag_and_logout(browser_session, auth_app):
-    """TC-VIEW-01·AUTH-04: 실제 Vite /api 프록시가 쿠키·Origin·ETag/304를 전달합니다."""
+@pytest.mark.parametrize("signup", [False, True])
+def test_vite_proxy_product_login_save_etag_and_logout(browser_session, auth_app, signup):
+    """TC-VIEW-01·AUTH-04/05: 가입/로그인과 쿠키·Origin·ETag/304를 실제 프록시로 확인합니다."""
     browser, flask_origin = browser_session
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -324,10 +325,15 @@ def test_vite_proxy_product_login_save_etag_and_logout(browser_session, auth_app
         else:
             raise RuntimeError("Vite 검증 서버 시작 시간 초과")
         page = context.new_page()
-        page.goto(origin)
-        page.get_by_role("textbox", name="아이디", exact=True).fill("auth-a")
-        page.get_by_label("비밀번호", exact=True).fill(PASSWORD)
-        page.get_by_role("button", name="로그인", exact=True).click()
+        if signup:
+            from test_registration_browser import form, finish_and_login
+            form(page, origin, "vite-new-user")
+            finish_and_login(page, "vite-new-user")
+        else:
+            page.goto(origin)
+            page.get_by_role("textbox", name="아이디", exact=True).fill("auth-a")
+            page.get_by_label("비밀번호", exact=True).fill(PASSWORD)
+            page.get_by_role("button", name="로그인", exact=True).click()
         expect(page.get_by_role("heading", name="어떤 프로젝트에서 작업할까요?")).to_be_visible()
         page.get_by_label("프로젝트 이름").fill("Vite 실제 프록시")
         page.get_by_role("button", name="생성하고 팀장으로 시작").click()
