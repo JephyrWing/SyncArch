@@ -8,6 +8,7 @@ from ..repositories import activity_repository as activities, document_repositor
 from ..repositories import project_repository as projects
 from ..repositories.user_repository import find_by_id
 from ..schemas.document_schema import canonical, payload_input, STATUSES, MAX_VERSION, fail
+from .api_spec_service import export_api_spec
 from .document_validation import changes_between, validate_transition
 from .project_access import require_access, require_active_actor
 from .project_events import project_changed, publish
@@ -67,6 +68,7 @@ def save_document(session_factory, actor_id, project_id, request, conversions):
             "version": document.version, "mutationId": request["mutationId"], "actorId": actor_id,
             "actorName": actor.display_name, "committedAt": utc(now), "changes": changes}})
     publish([event])
+    export_api_spec(session_factory, project_id)
     return result
 
 

@@ -69,7 +69,7 @@ export const AiDraftModal: React.FC<AiDraftModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
       <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden text-slate-100">
-        {/* Header */}
+        {/* [AI 초안] 헤더 */}
         <div className="p-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
@@ -94,7 +94,7 @@ export const AiDraftModal: React.FC<AiDraftModalProps> = ({
           </button>
         </div>
 
-        {/* Info Banner */}
+        {/* [AI 초안] 안내 배너 */}
         <div className="px-4 py-2.5 bg-indigo-950/40 border-b border-indigo-900/40 text-xs text-indigo-300 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-1.5">
             <AlertCircle className="w-4 h-4 text-indigo-400 shrink-0" />
@@ -111,7 +111,7 @@ export const AiDraftModal: React.FC<AiDraftModalProps> = ({
           </div>
         </div>
 
-        {/* Content list */}
+        {/* [AI 초안] 내용 목록 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {isGenerating ? (
             <div className="py-16 text-center space-y-3">
@@ -158,12 +158,12 @@ export const AiDraftModal: React.FC<AiDraftModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Description / Fields preview */}
+                  {/* [AI 초안] 설명 / 필드 미리보기 */}
                   <p className="text-xs text-slate-300 leading-relaxed mb-2 pl-6">
                     {item.description || item.summary || item.comment}
                   </p>
 
-                  {/* If feature: method & endpoint */}
+                  {/* [AI 초안] 기능이면 메서드와 엔드포인트 */}
                   {item.method && (
                     <div className="pl-6 flex items-center gap-2 text-[11px] font-mono text-slate-400">
                       <span className="text-sky-400 font-bold">{item.method}</span>
@@ -171,7 +171,7 @@ export const AiDraftModal: React.FC<AiDraftModalProps> = ({
                     </div>
                   )}
 
-                  {/* If Table: columns preview */}
+                  {/* [AI 초안] 테이블이면 컬럼 미리보기 */}
                   {item.columns && (
                     <div className="pl-6 flex items-center gap-1.5 flex-wrap pt-1">
                       {item.columns.map((col: any, cidx: number) => (
@@ -191,7 +191,7 @@ export const AiDraftModal: React.FC<AiDraftModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
+        {/* [AI 초안] 하단 버튼 */}
         <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
           <span className="text-xs text-slate-400">
             총 {items.length}개 항목 중{' '}

@@ -94,6 +94,12 @@ class IdempotencyKeyReused(ApplicationError):
     status = 409
 
 
+class InviteCodeNotFound(ApplicationError):
+    code = "NOT_FOUND"
+    message = "초대 코드가 올바르지 않습니다. 팀장에게 최신 코드를 받아 다시 입력해 주세요."
+    status = 404
+
+
 class UserNotFound(ApplicationError):
     code = "USER_NOT_FOUND"
     message = "추가할 수 있는 기존 사용자를 찾을 수 없습니다."

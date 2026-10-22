@@ -37,12 +37,16 @@ interface HeaderProps {
   stepLocks: Record<StepNumber, boolean>;
   onToggleLock: (step: StepNumber) => void;
   teamMembers: TeamMember[];
+  /** [협업 상태] 내 아바타는 따라가기 대상에서 뺀다. */
+  meId?: string;
   onToggleSpotlight: (memberId: string) => void;
   activeSpotlightMember: TeamMember | null;
   snapshots: SnapshotHistory[];
   onSaveSnapshot: (name: string) => void;
   onRestoreSnapshot: (id: string) => void;
   onOpenExport: () => void;
+  /** [협업 상태] 팀 아바타 앞에 보이는 저장 상태와 계정 버튼. */
+  statusSlot?: React.ReactNode;
 }
 
 const DBMS_OPTIONS: { id: SqlDialect; label: string }[] = [
@@ -69,19 +73,21 @@ export const Header: React.FC<HeaderProps> = ({
   stepLocks,
   onToggleLock,
   teamMembers,
+  meId,
   onToggleSpotlight,
   activeSpotlightMember,
   snapshots,
   onSaveSnapshot,
   onRestoreSnapshot,
   onOpenExport,
+  statusSlot,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
   const [showSnapshotMenu, setShowSnapshotMenu] = useState(false);
   const [newSnapshotName, setNewSnapshotName] = useState('');
 
-  // Project Switcher Modal/Dropdown
+  // [프로젝트] 프로젝트 전환 모달/드롭다운
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjTitle, setNewProjTitle] = useState('');
@@ -129,21 +135,21 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-14 bg-slate-900 border-b border-slate-800 text-slate-100 px-2 sm:px-4 flex items-center justify-between select-none relative z-50 shrink-0 gap-2 overflow-visible">
-      {/* Left: Brand, Project Switcher & Status */}
+      {/* [공통 화면] 왼쪽: 브랜드, 프로젝트 전환, 상태 */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-        {/* Brand */}
+        {/* [공통 화면] 브랜드 */}
         <div className="flex items-center gap-1.5 sm:gap-2 font-bold tracking-tight text-indigo-400 shrink-0">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-sm shadow-indigo-500/20">
             <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
-          <span className="text-sm sm:text-base bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-200 bg-clip-text text-transparent">
+          <span className="hidden lg:inline text-sm sm:text-base bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-200 bg-clip-text text-transparent">
             SyncArch
           </span>
         </div>
 
         <div className="h-4 w-px bg-slate-700/80 mx-0.5 hidden sm:block" />
 
-        {/* Multi-Project Selector Dropdown */}
+        {/* [프로젝트] 프로젝트 선택 드롭다운 */}
         <div className="relative">
           <button
             onClick={() => setShowProjectDropdown(!showProjectDropdown)}
@@ -152,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <FolderKanban className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             <span className="truncate">{currentProject.title}</span>
-            <span className="hidden md:inline-block text-[9px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40 shrink-0 uppercase font-mono">
+            <span className="hidden xl:inline-block text-[9px] px-1 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40 shrink-0 uppercase font-mono">
               {currentProject.targetDbms}
             </span>
             <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
@@ -160,7 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {showProjectDropdown && (
             <>
-              {/* Click-outside backdrop to dismiss dropdown */}
+              {/* [프로젝트] 바깥을 누르면 드롭다운을 닫는 배경 */}
               <div 
                 className="fixed inset-0 z-40" 
                 onClick={() => setShowProjectDropdown(false)} 
@@ -204,12 +210,15 @@ export const Header: React.FC<HeaderProps> = ({
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-400 truncate">{proj.summary}</span>
-                        <div className="text-[9px] text-slate-500 font-mono mt-0.5">
-                          테이블 {proj.tables?.length || 0}개 · 기능 {proj.features?.length || 0}개
-                        </div>
+                        {/* [프로젝트] 열린 프로젝트의 문서만 불러오므로 개수도 그 프로젝트만 있다. */}
+                        {isSelected && (
+                          <div className="text-[9px] text-slate-500 font-mono mt-0.5">
+                            테이블 {proj.tables?.length || 0}개 · 기능 {proj.features?.length || 0}개
+                          </div>
+                        )}
                       </div>
 
-                      {/* Clone & Delete Actions */}
+                      {/* [프로젝트] 복제·삭제 버튼 */}
                       <div className="flex items-center gap-1 shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
                         {onCloneProject && (
                           <button
@@ -259,7 +268,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Snapshot Dropdown */}
+        {/* [공통 화면] 스냅샷 드롭다운 */}
         <div className="relative hidden sm:block">
           <button
             onClick={() => setShowSnapshotMenu(!showSnapshotMenu)}
@@ -272,7 +281,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {showSnapshotMenu && (
             <>
-              {/* Click-outside backdrop */}
+              {/* [공통 화면] 바깥을 누르면 닫는 배경 */}
               <div 
                 className="fixed inset-0 z-40" 
                 onClick={() => setShowSnapshotMenu(false)} 
@@ -331,8 +340,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Center: 4-Step Pipeline Switcher */}
-      <nav className="flex items-center bg-slate-950/70 p-0.5 sm:p-1 rounded-xl border border-slate-800/80 shadow-inner shrink-0">
+      {/* [공통 화면] 가운데: 4단계 전환 */}
+      <nav className="flex items-center min-w-0 overflow-x-auto bg-slate-950/70 p-0.5 sm:p-1 rounded-xl border border-slate-800/80 shadow-inner">
         {steps.map((st) => {
           const isActive = currentStep === st.num;
           const isLocked = stepLocks[st.num];
@@ -347,17 +356,19 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
               }`}
             >
-              <span className="inline md:hidden">{st.label}</span>
-              <span className="hidden md:inline">{st.fullLabel}</span>
+              <span className="inline xl:hidden">{st.label}</span>
+              <span className="hidden xl:inline">{st.fullLabel}</span>
               {isLocked && <Lock className="w-3 h-3 text-amber-400 ml-0.5 shrink-0" />}
             </button>
           );
         })}
       </nav>
 
-      {/* Right: Team, Lock, and Export */}
+      {/* [공통 화면] 오른쪽: 팀, 잠금, 내보내기 */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Step Lock Toggle */}
+        {statusSlot}
+
+        {/* [공통 화면] 단계 잠금 전환 */}
         <button
           onClick={() => onToggleLock(currentStep)}
           className={`p-1.5 rounded-lg border transition-colors ${
@@ -370,44 +381,61 @@ export const Header: React.FC<HeaderProps> = ({
           {stepLocks[currentStep] ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
         </button>
 
-        {/* 5-Person Team Avatars */}
+        {/* [멤버 관리] 팀원 아바타 */}
         <div className="hidden lg:flex items-center gap-1 border-l border-slate-800 pl-2">
+          {activeSpotlightMember && (
+            <span className="mr-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 whitespace-nowrap">
+              {activeSpotlightMember.name} 따라가는 중
+            </span>
+          )}
           {teamMembers.map((member) => {
             const isSpotlight = activeSpotlightMember?.id === member.id;
+            const isMe = member.id === meId;
+            // [협업 상태] 접속 중이면 초록 점과 보고 있는 단계 번호를 보여 준다.
+            const where = member.isOnline ? `Step ${member.currentStep} 보는 중` : '오프라인';
             return (
               <button
                 key={member.id}
                 onClick={() => onToggleSpotlight(member.id)}
+                disabled={isMe || !member.isOnline}
+                aria-pressed={isSpotlight}
                 className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white transition-transform ${
                   member.avatarBg
                 } ${
                   isSpotlight
                     ? 'ring-2 ring-amber-400 scale-110 shadow-lg shadow-amber-500/30'
-                    : 'hover:scale-105 opacity-90'
-                }`}
-                title={`${member.name} (${member.role}) - 클릭하여 팔로우 모드`}
+                    : member.isOnline
+                      ? 'hover:scale-105 opacity-95'
+                      : 'opacity-35 grayscale'
+                } disabled:cursor-default`}
+                title={`${member.name}${isMe ? ' (나)' : ''} · ${member.role} · ${where}${isMe || !member.isOnline ? '' : isSpotlight ? ' · 눌러서 따라가기 끄기' : ' · 눌러서 이 사람 화면 따라가기'}`}
               >
                 {member.name.charAt(0)}
-                {isSpotlight && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full border-2 border-slate-900" />
+                {member.isOnline && (
+                  <>
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border border-slate-900" />
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[12px] h-3 px-0.5 rounded-full bg-slate-900 text-[8px] leading-3 text-slate-200 border border-slate-600">
+                      {member.currentStep}
+                    </span>
+                  </>
                 )}
               </button>
             );
           })}
         </div>
 
-        {/* Export Engine Modal Trigger */}
+        {/* [명세서 생성] 내보내기 모달 열기 버튼 */}
         <button
           onClick={onOpenExport}
           className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
         >
           <Download className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">내보내기 (SQL / MD)</span>
-          <span className="sm:hidden inline">내보내기</span>
+          <span className="hidden xl:inline">내보내기 (SQL / MD)</span>
+          <span className="xl:hidden inline">내보내기</span>
         </button>
       </div>
 
-      {/* New Project Registration Modal */}
+      {/* [프로젝트] 새 프로젝트 등록 모달 */}
       {showNewProjectModal && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 text-xs text-slate-100">

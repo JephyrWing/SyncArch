@@ -48,9 +48,9 @@ test('sortTablesTopologically places parent tables before dependent children', (
   const sorted = sortTablesTopologically(mockTables);
   const names = sorted.map(t => t.name);
 
-  // 'users' must come before 'studies' (studies references users)
+  // [SQL 생성] 'users'가 'studies'보다 먼저 와야 한다(studies가 users를 참조)
   assert.ok(names.indexOf('users') < names.indexOf('studies'), 'users must precede studies');
-  // 'studies' and 'users' must come before 'attendances' (attendances references both)
+  // [SQL 생성] 'studies'와 'users'가 'attendances'보다 먼저 와야 한다(attendances가 둘 다 참조)
   assert.ok(names.indexOf('users') < names.indexOf('attendances'), 'users must precede attendances');
   assert.ok(names.indexOf('studies') < names.indexOf('attendances'), 'studies must precede attendances');
 });

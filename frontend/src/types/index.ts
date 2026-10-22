@@ -9,6 +9,8 @@ export interface TeamMember {
   avatarBg: string;
   currentStep: StepNumber;
   isSpotlight: boolean;
+  // [협업 상태] 지금 이 프로젝트 화면을 열어 둔 멤버
+  isOnline?: boolean;
 }
 
 export type IdeaCategory = 'problems_goals' | 'actors' | 'user_stories' | 'constraints';
@@ -38,9 +40,9 @@ export interface IdeaCard {
   votedBy: string[];
   comments: IdeaComment[];
   isAiDraft?: boolean;
-  // Why this idea was proposed (Background / Hypothesis)
+  // [아이디어 보드] 이 아이디어를 낸 이유(배경 / 가설)
   rationale?: string;
-  // Why this idea was accepted or chosen (Decision log)
+  // [아이디어 보드] 이 아이디어를 채택·선택한 이유(결정 기록)
   decisionStatus?: DecisionStatus;
   decisionReason?: string;
   decidedBy?: string;
@@ -51,7 +53,7 @@ export type PriorityLevel = 'P0' | 'P1' | 'P2';
 export type FeatureProgressStatus = 'PLANNED' | 'IN_PROGRESS' | 'QA' | 'COMPLETED';
 
 export interface FeatureSpec {
-  id: string; // e.g. FEAT-01
+  id: string; // [기능 명세] 예: FEAT-01
   displayCode?: string;
   domain: string;
   name: string;
@@ -113,7 +115,7 @@ export interface ErdColumn {
   scale?: number;
   isPrimaryKey: boolean;
   isForeignKey: boolean;
-  references?: string; // e.g. "users.id"
+  references?: string; // [ERD 설계] 예: "users.id"
   isUnique: boolean;
   isNullable: boolean;
   defaultValue?: string;
@@ -178,4 +180,71 @@ export interface ProjectData {
   currentArchVersionId?: string;
   tables: ErdTable[];
   updatedAt: string;
+  // [문서 저장] 서버가 읽기 전용으로 보존하는 호환 필드의 원본. 저장할 때 이 값을 그대로 돌려보낸다.
+  compat?: Pick<DocumentPayload, 'stepLocks' | 'archVersions' | 'currentArchVersionId'>;
+}
+
+// [API 통신] 서버 API 형태(02 설계 API 정의서). 공유 문서 payload에는 개인 화면 상태를 넣지 않는다.
+export interface SessionUser {
+  id: string;
+  loginId: string;
+  displayName: string;
+}
+
+export type ProjectRole = 'OWNER' | 'EDITOR';
+
+export interface ProjectSummary {
+  id: string;
+  title: string;
+  summary: string;
+  categoryTag: string;
+  targetDbms: SqlDialect;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  role: ProjectRole;
+}
+
+export interface DocumentPayload {
+  schemaVersion: 1;
+  ideas: IdeaCard[];
+  features: FeatureSpec[];
+  nodes: ArchNode[];
+  connections: ArchConnection[];
+  tables: ErdTable[];
+  stepLocks?: Record<StepNumber, boolean>;
+  archVersions?: ArchVersion[];
+  currentArchVersionId?: string;
+}
+
+export interface DocumentView {
+  project: ProjectSummary;
+  version: number;
+  payload: DocumentPayload;
+  updatedAt: string;
+  updatedBy?: { id: string; displayName: string };
+}
+
+// [채팅] GET/POST /api/projects/{id}/messages 항목
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  displayName: string;
+  body: string;
+  createdAt: string;
+}
+
+// [협업 상태] POST /api/projects/{id}/presence 응답 항목
+export interface PresenceEntry {
+  userId: string;
+  displayName: string;
+  step: StepNumber;
+}
+
+export interface ProjectMemberInfo {
+  userId: string;
+  loginId: string;
+  displayName: string;
+  role: ProjectRole;
+  joinedAt: string;
 }

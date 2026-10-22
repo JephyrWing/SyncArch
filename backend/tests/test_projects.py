@@ -283,13 +283,13 @@ def test_activity_migration_preserves_old_payload_and_downgrade(app):
         actor_id = str(uuid4())
         db.session.execute(text("INSERT INTO app_users (id, login_id, display_name, password_hash, is_active, created_at) "
             "VALUES (:id, 'migration-owner', :name, '!disabled', 1, CURRENT_TIMESTAMP)"), {"id": actor_id, "name": "보존"})
-        project = Project(title="이전 문서", owner_id=actor_id)
-        db.session.add(project)
-        db.session.flush()
+        # 이후 마이그레이션이 projects에 열을 더하므로 프로젝트도 0002 당시 열만 사용해 만듭니다.
+        pid = str(uuid4())
+        db.session.execute(text("INSERT INTO projects (id, owner_id, title, summary, category_tag, target_dbms, created_at, updated_at) "
+            "VALUES (:id, :owner, '이전 문서', '', '', 'mariadb', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"), {"id": pid, "owner": actor_id})
         payload = {"schemaVersion": 1, "marker": "보존 🚀", "unknown": [1, 2]}
-        db.session.add(ProjectDocument(project_id=project.id, payload=payload, updated_by=actor_id))
+        db.session.add(ProjectDocument(project_id=pid, payload=payload, updated_by=actor_id))
         db.session.commit()
-        pid = project.id
         # DDL 전 읽기 트랜잭션을 끝내 새 테이블을 이전 snapshot에서 조회하지 않습니다.
         db.session.remove()
         upgrade(directory=directory)

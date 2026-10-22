@@ -1,4 +1,6 @@
 import type { IdeaCard, FeatureSpec, ArchNode, ArchConnection, ErdTable } from '../types/index.ts';
+import { voteCount } from './votes.ts';
+import { featureCode, featureCodeOf } from './features.ts';
 
 export function generateMarkdownSpec(
   title: string,
@@ -18,7 +20,7 @@ export function generateMarkdownSpec(
   lines.push(`- **한 줄 요약:** ${summary || '사내 스터디 매칭 & 출석 관리 플랫폼'}`);
   lines.push(`- **설계 완료 단계:** Step 1 (아이디어) → Step 2 (기능/API) → Step 3 (시스템 아키텍처) → Step 4 (DB ERD)\n`);
 
-  // Step 1
+  // [명세서 생성] Step 1
   lines.push(`---`);
   lines.push(`## 1. 아이디어 및 요구사항 분석 (Step 1)`);
   lines.push(`| 분류 | 제목 | 상세 내용 | 제안자 | 팀 투표 수 |`);
@@ -33,18 +35,18 @@ export function generateMarkdownSpec(
 
   cards.forEach(card => {
     const cat = categoryLabels[card.category] || card.category;
-    lines.push(`| ${cat} | **${card.title}** | ${card.description} | ${card.author} | ⭐ ${card.votes}표 |`);
+    lines.push(`| ${cat} | **${card.title}** | ${card.description} | ${card.author} | ⭐ ${voteCount(card)}표 |`);
   });
   lines.push('');
 
-  // Step 2
+  // [명세서 생성] Step 2
   lines.push(`---`);
   lines.push(`## 2. 기능 명세 및 API 설계 (Step 2)`);
   lines.push(`| 기능 ID | 도메인 | 기능명 | 우선순위 | 담당자 | HTTP Method | Endpoint | 핵심 필드 |`);
   lines.push(`| :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |`);
 
   features.forEach(f => {
-    lines.push(`| **${f.id}** | ${f.domain} | ${f.name} | \`${f.priority}\` | ${f.assignee} | \`${f.method}\` | \`${f.endpoint}\` | ${f.requestFields} → ${f.responseFields} |`);
+    lines.push(`| **${featureCode(f)}** | ${f.domain} | ${f.name} | \`${f.priority}\` | ${f.assignee} | \`${f.method}\` | \`${f.endpoint}\` | ${f.requestFields} → ${f.responseFields} |`);
   });
   lines.push('');
 
@@ -59,7 +61,7 @@ export function generateMarkdownSpec(
   });
   lines.push('```\n');
 
-  // Step 3
+  // [명세서 생성] Step 3
   lines.push(`---`);
   lines.push(`## 3. 시스템 아키텍처 설계 (Step 3)`);
   lines.push(`### 3.1 아키텍처 컴포넌트 목록`);
@@ -75,7 +77,7 @@ export function generateMarkdownSpec(
   lines.push('```mermaid');
   lines.push('flowchart LR');
   
-  // Group nodes by category
+  // [명세서 생성] 노드를 분류별로 묶는다
   const clientNodes = nodes.filter(n => n.category === 'Client');
   const serviceNodes = nodes.filter(n => n.category === 'Service');
   const dataNodes = nodes.filter(n => n.category === 'DataStore');
@@ -113,13 +115,13 @@ export function generateMarkdownSpec(
 
   lines.push('```\n');
 
-  // Step 4
+  // [명세서 생성] Step 4
   lines.push(`---`);
   lines.push(`## 4. 데이터베이스 ERD 명세 (Step 4)`);
   tables.forEach(table => {
     lines.push(`### 4.${tables.indexOf(table) + 1} 테이블: \`${table.name}\` (${table.comment})`);
     if (table.relatedFeatureIds.length > 0) {
-      lines.push(`> **연관 기능:** ${table.relatedFeatureIds.join(', ')}`);
+      lines.push(`> **연관 기능:** ${table.relatedFeatureIds.map((id) => featureCodeOf(features, id)).join(', ')}`);
     }
     lines.push(`| 컬럼명 | 데이터 타입 | PK | FK 참조 | Null 허용 | Unique | 기본값 | 설명 |`);
     lines.push(`| :--- | :--- | :---: | :--- | :---: | :---: | :--- | :--- |`);
@@ -145,7 +147,7 @@ export function generateMarkdownSpec(
     lines.push(`    }`);
   });
 
-  // Relationships
+  // [명세서 생성] 관계
   tables.forEach(table => {
     table.columns.forEach(col => {
       if (col.isForeignKey && col.references) {

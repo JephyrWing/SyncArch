@@ -31,3 +31,5 @@ certifi==2026.10.19
 charset-normalizer==3.5.2
 idna==3.20
 urllib3==2.8.0
+openpyxl==3.1.5
+et_xmlfile==2.0.0

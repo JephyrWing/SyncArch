@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { ArchNode, ArchConnection } from '../types/index.ts';
+import { changedFields, isValidConnection } from './architecture.ts';
 
 // TC-ARCH-01: 구성 요소 편집과 ID·위치 보존
 test('TC-ARCH-01: updating node preserves original ID, position coordinates and keeps existing connections intact', () => {
@@ -137,4 +138,26 @@ test('TC-SAFE-01: preventing connection to non-existent nodes and removing orpha
 
   assert.equal(nodes.length, 2, 'node-2가 삭제되어야 합니다');
   assert.equal(connections.length, 0, 'node-2에 연결되었던 c-1, c-2 연결선이 모두 동반 삭제되어야 합니다');
+});
+
+test('isValidConnection: rejects missing nodes and self-links', () => {
+  const nodes = [
+    { id: 'a', name: 'A', category: 'Client', techStack: [], x: 0, y: 0, description: '' },
+    { id: 'b', name: 'B', category: 'Service', techStack: [], x: 0, y: 0, description: '' },
+  ] satisfies ArchNode[];
+  assert.equal(isValidConnection(nodes, 'a', 'b'), true);
+  assert.equal(isValidConnection(nodes, 'a', 'a'), false);
+  assert.equal(isValidConnection(nodes, 'a', 'gone'), false);
+  assert.equal(isValidConnection(nodes, 'gone', 'b'), false);
+});
+
+test('changedFields: sends only fields edited since the modal opened', () => {
+  const opened = { name: 'API', techStack: ['Flask'], description: 'old', label: undefined as string | undefined };
+  const edited = { name: 'API Gateway', techStack: ['Flask'], description: 'old', label: undefined };
+  assert.deepEqual(changedFields(opened, edited), { name: 'API Gateway' });
+});
+
+test('changedFields: clearing a field is a change, untouched form defaults are not', () => {
+  const opened = { assignedTeam: 'Backend', description: 'WSS heartbeat' };
+  assert.deepEqual(changedFields(opened, { assignedTeam: 'Backend', description: '' }), { description: '' });
 });

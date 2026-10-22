@@ -37,6 +37,7 @@ def test_migration_and_project_document_roundtrip(app):
         assert set(inspect(db.engine).get_table_names()) == {
             "alembic_version", "app_users", "projects", "project_members",
             "project_documents", "document_mutations", "project_activity", "app_user_identities",
+            "project_messages",
         }
         db.session.remove()
         downgrade(directory=directory, revision="base")

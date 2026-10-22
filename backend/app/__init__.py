@@ -29,12 +29,14 @@ def create_app(test_config=None):
     from .routes.members import members
     from .routes.documents import documents
     from .routes.social_auth import social_auth, install_log_filter
+    from .routes.collaboration import collaboration
     app.register_blueprint(health)
     app.register_blueprint(auth)
     app.register_blueprint(projects)
     app.register_blueprint(members)
     app.register_blueprint(documents)
     app.register_blueprint(social_auth)
+    app.register_blueprint(collaboration)
     install_log_filter()
     register_error_handlers(app)
 
