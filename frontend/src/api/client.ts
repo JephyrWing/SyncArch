@@ -1,5 +1,5 @@
 // [API 통신] Flask API용 얇은 fetch 래퍼: {data} / {error:{code,message}} 계약과 JWT 액세스 토큰(Authorization 헤더)을 처리한다.
-import { authClient } from './auth.ts';
+import { AuthError, authClient } from './auth.ts';
 
 export interface ApiErrorDetail {
   code?: string;
@@ -28,6 +28,12 @@ export interface ApiResponse<T> {
 
 // [API 통신] 액세스 토큰을 붙여 보낸다. 토큰은 15분이면 만료되므로 401이면 리프레시 쿠키로 한 번 새로 받고 다시 보낸다.
 const send = async (path: string, init: RequestInit & { headers: Record<string, string> }): Promise<Response> => {
+  const sessionVersion = authClient.sessionVersion();
+  const checkSession = () => {
+    if (sessionVersion !== authClient.sessionVersion()) {
+      throw new ApiError(401, 'SESSION_CHANGED', '로그인 계정이 바뀌었습니다. 이전 요청을 중단했습니다.');
+    }
+  };
   const go = () =>
     fetch(path, {
       ...init,
@@ -38,9 +44,20 @@ const send = async (path: string, init: RequestInit & { headers: Record<string, 
     });
   try {
     const response = await go();
-    if (response.status !== 401 || !(await authClient.refresh().then(() => true, () => false))) return response;
+    if (response.status !== 401) return response;
+    checkSession();
+    try {
+      await authClient.refresh();
+    } catch (error) {
+      if (error instanceof AuthError && ['ACCOUNT_CHANGED', 'SESSION_CHANGED'].includes(error.code)) {
+        throw new ApiError(401, error.code, '로그인 계정이 바뀌었습니다. 내 변경을 백업한 뒤 다시 로그인하세요.');
+      }
+      return response;
+    }
+    checkSession();
     return await go();
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError(0, 'NETWORK_ERROR', '서버에 연결할 수 없습니다. 네트워크와 서버 실행 상태를 확인한 뒤 다시 시도하세요.');
   }
 };

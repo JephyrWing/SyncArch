@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Check, Copy, KeyRound, RefreshCw, X } from 'lucide-react';
 import { fetchInviteCode, regenerateInviteCode } from '../api/projects.ts';
+import { isAccessError, type ProjectAccess } from '../hooks/useProjectAccess.ts';
 
 /** [초대 코드] 화면에는 읽기 쉽게 ABCD-2345로 보여 준다. 서버는 하이픈 없이 받아도 된다. */
 const pretty = (code: string) => `${code.slice(0, 4)}-${code.slice(4)}`;
 
 /** [초대 코드] 팀장 헤더 버튼. 코드를 보고 복사하고, 새어 나갔으면 재발급한다. */
-export const InviteButton: React.FC<{ projectId: string }> = ({ projectId }) => {
+export const InviteButton: React.FC<{ projectId: string; access: ProjectAccess }> = ({ projectId, access }) => {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
   const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle');
@@ -14,12 +15,15 @@ export const InviteButton: React.FC<{ projectId: string }> = ({ projectId }) => 
 
   const load = async (action: () => Promise<string>) => {
     // [초대 코드] 요청이 겹치면 늦게 온 옛 코드가 화면에 남을 수 있어 한 번에 하나만 보낸다.
-    if (state === 'loading') return;
+    if (state === 'loading' || access.isStopped()) return;
     setState('loading');
     try {
-      setCode(await action());
+      const next = await action();
+      if (access.isStopped()) return;
+      setCode(next);
       setState('idle');
     } catch (err) {
+      if (isAccessError(err)) access.stop(err);
       setError((err as Error).message);
       setState('error');
     }
@@ -39,6 +43,7 @@ export const InviteButton: React.FC<{ projectId: string }> = ({ projectId }) => 
   return (
     <div className="relative">
       <button
+        disabled={access.isStopped()}
         onClick={() => {
           setOpen(!open);
           if (!open && !code) load(() => fetchInviteCode(projectId));
@@ -78,7 +83,7 @@ export const InviteButton: React.FC<{ projectId: string }> = ({ projectId }) => 
                 load(() => regenerateInviteCode(projectId));
               }
             }}
-            disabled={state === 'loading'}
+            disabled={state === 'loading' || access.isStopped()}
             className="flex items-center gap-1 text-slate-400 hover:text-white disabled:opacity-40"
           >
             <RefreshCw className="h-3 w-3" />
