@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
-import type { ArchConnection, ArchNode, ArchProtocol, ArchVersion } from '../../types/index.ts';
+import type { ArchConnection, ArchNode, ArchProtocol } from '../../types/index.ts';
 import { CATEGORY_META, PROTOCOL_CONFIG } from './archConfig.ts';
 
 interface ArchCanvasProps {
   nodes: ArchNode[];
   connections: ArchConnection[];
-  currentVersion?: ArchVersion;
   filterProtocol: ArchProtocol | 'All';
   onChangeFilterProtocol: (protocol: ArchProtocol | 'All') => void;
   selectedNodeId?: string;
@@ -21,7 +20,6 @@ interface ArchCanvasProps {
 export const ArchCanvas: React.FC<ArchCanvasProps> = ({
   nodes,
   connections,
-  currentVersion,
   filterProtocol,
   onChangeFilterProtocol,
   selectedNodeId,
@@ -67,17 +65,7 @@ export const ArchCanvas: React.FC<ArchCanvasProps> = ({
       <div className="p-3 border-b border-slate-800 bg-slate-900/50 flex flex-col gap-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* [시스템 아키텍처] 서버에서 만든 프로젝트는 저장된 버전 없이 시작한다. */}
-            {currentVersion && (
-              <>
-                <span className="text-xs font-semibold text-slate-200">
-                  {currentVersion.versionNumber} ({currentVersion.label})
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono hidden md:inline">
-                  · {currentVersion.description}
-                </span>
-              </>
-            )}
+            <span className="text-xs font-semibold text-slate-200">현재 아키텍처</span>
           </div>
 
           <div className="flex items-center gap-2">

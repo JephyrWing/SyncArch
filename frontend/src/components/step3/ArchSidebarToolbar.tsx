@@ -1,16 +1,11 @@
 import React from 'react';
-import { Filter, GitBranch, History, Link, Network, Plus, Save, Search, X } from 'lucide-react';
-import type { ArchCategory, ArchVersion, TeamOrg } from '../../types/index.ts';
+import { Filter, Link, Network, Plus, Search, X } from 'lucide-react';
+import type { ArchCategory, TeamOrg } from '../../types/index.ts';
 
 interface ArchSidebarToolbarProps {
   nodeCount: number;
   connectionCount: number;
   isLocked: boolean;
-  archVersions: ArchVersion[];
-  currentVersionId: string;
-  onSwitchVersion: (versionId: string) => void;
-  onOpenSaveVersion: () => void;
-  onOpenVersionList: () => void;
   onToggleAddConn: () => void;
   onToggleAddNode: () => void;
   searchQuery: string;
@@ -25,11 +20,6 @@ export const ArchSidebarToolbar: React.FC<ArchSidebarToolbarProps> = ({
   nodeCount,
   connectionCount,
   isLocked,
-  archVersions,
-  currentVersionId,
-  onSwitchVersion,
-  onOpenSaveVersion,
-  onOpenVersionList,
   onToggleAddConn,
   onToggleAddNode,
   searchQuery,
@@ -44,7 +34,7 @@ export const ArchSidebarToolbar: React.FC<ArchSidebarToolbarProps> = ({
       <div>
         <div className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
           <Network className="w-4 h-4" />
-          Step 3. 시스템 아키텍처 &amp; 버전 관리
+          Step 3. 시스템 아키텍처
         </div>
         <div className="text-[11px] text-slate-400 mt-0.5">총 {nodeCount}개 노드 / {connectionCount}개 통신선</div>
       </div>
@@ -52,14 +42,6 @@ export const ArchSidebarToolbar: React.FC<ArchSidebarToolbarProps> = ({
       <div className="flex items-center gap-1.5">
         {!isLocked && (
           <>
-            <button
-              onClick={onOpenSaveVersion}
-              className="px-2.5 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 rounded text-xs font-semibold flex items-center gap-1 shadow-sm transition-colors"
-              title="현재 아키텍처 상태를 새 버전으로 스냅샷 저장"
-            >
-              <Save className="w-3.5 h-3.5 text-indigo-400" />
-              <span>버전 저장</span>
-            </button>
             <button
               onClick={onToggleAddConn}
               className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded text-xs font-semibold flex items-center gap-1 border border-slate-700 transition-colors"
@@ -79,32 +61,7 @@ export const ArchSidebarToolbar: React.FC<ArchSidebarToolbarProps> = ({
       </div>
     </div>
 
-    {/* [시스템 아키텍처] 아키텍처 버전 선택 */}
-    <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
-      <div className="flex items-center gap-2 font-medium text-slate-300">
-        <GitBranch className="w-4 h-4 text-indigo-400 shrink-0" />
-        <span className="font-semibold text-slate-400">아키텍처 버전:</span>
-        <select
-          value={currentVersionId}
-          onChange={(e) => onSwitchVersion(e.target.value)}
-          className="bg-slate-900 border border-slate-700 rounded-md px-2 py-0.5 text-white font-semibold focus:outline-none cursor-pointer max-w-[200px]"
-        >
-          {archVersions.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.versionNumber} ({v.label})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <button
-        onClick={onOpenVersionList}
-        className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold"
-      >
-        <History className="w-3 h-3" />
-        <span>히스토리</span>
-      </button>
-    </div>
+    <p className="text-[11px] text-slate-400">편집 내용은 자동 저장됩니다. 저장 상태는 상단에서 확인하세요.</p>
 
     {/* [시스템 아키텍처] 검색창과 조직·계층 필터 */}
     <div className="space-y-1.5 pt-0.5">

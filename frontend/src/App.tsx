@@ -404,12 +404,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   );
 
   // [공통 화면] 단계 잠금 전환
-  // shortcut: 서버 계약(W05)은 stepLocks를 읽기 전용으로 보존한다. 저장한 척 되돌아가지 않도록 바꾸지 않고 안내만 한다.
-  // 서버가 잠금 저장을 지원하면 stepLocks를 갱신하던 예전 처리로 되돌린다.
-  const handleToggleLock = (_step: StepNumber) => {
-    pushToast('단계 잠금은 아직 저장되지 않습니다', ['팀 문서 저장 계약에서 단계 잠금은 읽기 전용입니다.']);
-  };
-
   // [공통 화면] 스냅샷 처리
   const handleSaveSnapshot = (name: string) => {
     const id = crypto.randomUUID();
@@ -615,23 +609,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
     });
   };
 
-  const handleSwitchArchVersion = (versionId: string) => {
-    const targetVer = currentProject.archVersions.find((v) => v.id === versionId);
-    if (targetVer) {
-      // [시스템 아키텍처] 저장된 버전의 구성으로 되돌린다. currentArchVersionId는 서버가 읽기 전용으로 보존해서 바꾸지 않는다.
-      updateCurrentProject({
-        nodes: JSON.parse(JSON.stringify(targetVer.nodes)),
-        connections: JSON.parse(JSON.stringify(targetVer.connections)),
-      });
-    }
-  };
-
-  // shortcut: 서버 계약(W05)은 archVersions를 읽기 전용으로 보존한다. 저장한 척 사라지지 않도록 안내만 한다.
-  // 프로젝트 전체 버전 기록은 상단 스냅샷(활동 이력)을 쓴다. 서버가 아키텍처 버전 저장을 지원하면 되돌린다.
-  const handleSaveNewArchVersion = (_versionNumber: string, _label: string, _description: string) => {
-    pushToast('아키텍처 버전은 아직 저장되지 않습니다', ['팀 문서 저장 계약에서 아키텍처 버전은 읽기 전용입니다.']);
-  };
-
   // [ERD 설계] Step 4 처리와 대상 DBMS
   const handleChangeTargetDbms = (dbms: SqlDialect) => {
     setPreviewDbms(dbms);
@@ -749,7 +726,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
           setCurrentStep(step);
         }}
         stepLocks={currentProject.stepLocks}
-        onToggleLock={handleToggleLock}
         teamMembers={people}
         meId={me.id}
         onToggleSpotlight={(id) => setFollowId((prev) => (prev === id || id === me.id ? null : id))}
@@ -825,10 +801,6 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
             onAddConnection={handleAddConnection}
             onUpdateConnection={handleUpdateConnection}
             onDeleteConnection={handleDeleteConnection}
-            archVersions={currentProject.archVersions}
-            currentVersionId={currentProject.currentArchVersionId || currentProject.archVersions[0]?.id || ''}
-            onSwitchVersion={handleSwitchArchVersion}
-            onSaveNewVersion={handleSaveNewArchVersion}
             isLocked={currentProject.stepLocks[3]}
             sidebarWidth={sidebarWidth}
             onStartResize={handleStartResize}
