@@ -149,7 +149,8 @@ export function generateSql(tables: ErdTable[], settings: ExportSettings, metada
       }
     }
   }
-  if (tables.length === 0) return '-- 정의된 테이블이 없습니다.';
+  if (tables.length === 0) return (metadata
+    ? `-- Saved Version: ${metadata.version}\n-- Generated At: ${metadata.generatedAt}\n` : '') + '-- 정의된 테이블이 없습니다.';
 
   if (settings.dialect === 'prisma') {
     return generatePrismaSchema(tables);

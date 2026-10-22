@@ -23,6 +23,10 @@ test('TC-OUT-02: contradictory, irrelevant and invalid type parameters fail expl
   assert.throws(() => generateSql([table('INT', { isForeignKey: true, references: 'missing.id' })], settings), /FK/);
 });
 test('TC-OUT-01: saved version metadata, escaped cells and empty project never invent example APIs', () => {
+  const emptySql = generateSql([], settings, { version: 9, generatedAt: '2026-10-22T00:00:00Z' });
+  assert.ok(emptySql.includes('-- Saved Version: 9'));
+  assert.ok(emptySql.includes('-- Generated At: 2026-10-22T00:00:00Z'));
+  assert.ok(!emptySql.includes('CREATE TABLE'));
   const md = generateMarkdownSpec('Project', '', [], [], [], [], [table('VARCHAR', { length: 120 })], { version: 9, generatedAt: '2026-10-22T00:00:00Z' });
   assert.ok(md.includes('saved version: 9')); assert.ok(md.includes('VARCHAR(120)'));
   assert.ok(!md.includes('사내 SSO 로그인')); assert.ok(md.includes('3.3 통신 연결 속성'));
