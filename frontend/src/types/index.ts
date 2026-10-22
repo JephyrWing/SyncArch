@@ -109,7 +109,7 @@ export interface ErdColumn {
   id: string;
   name: string;
   dataType: string;
-  // VARCHAR 길이, DECIMAL/DATETIME 정밀도는 자료형과 분리해 저장합니다.
+  // 문자·바이너리·BIT 길이, DECIMAL/시간 정밀도는 서버가 자료형과 분리해 저장합니다.
   length?: number;
   precision?: number;
   scale?: number;

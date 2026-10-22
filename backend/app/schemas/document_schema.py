@@ -115,16 +115,40 @@ def _ids(value, path):
 
 
 def data_type(column, path, conversions):
-    original = string(column["dataType"], path + ".dataType", 40, empty=False)
+    original = string(column["dataType"], path + ".dataType", 4000, empty=False)
+    # ENUM/SET labels are case-sensitive application data, not SQL keywords.
+    choice = re.fullmatch(r"(ENUM|SET)\s*\((.*)\)", original.strip(), re.I | re.S)
+    if choice:
+        # Only SQL single-quoted literals, escaped with doubled quotes. No SQL clauses.
+        literal = r"'(?:[^'\\\x00-\x1f]|'')*'"
+        if not re.fullmatch(rf"\s*{literal}(?:\s*,\s*{literal})*\s*", choice[2]):
+            fail(path + ".dataType", "ENUM/SET은 작은따옴표 값 목록이어야 합니다. 따옴표는 두 번 입력하세요.")
+        labels = re.findall(literal, choice[2])
+        decoded = [label[1:-1].replace("''", "'") for label in labels]
+        if len(set(decoded)) != len(decoded) or len(labels) > (64 if choice[1].upper() == "SET" else 65535):
+            fail(path + ".dataType", "ENUM/SET 값은 중복 없이 허용 개수 이하여야 합니다.")
+        if choice[1].upper() == "SET" and any("," in label for label in decoded):
+            fail(path + ".dataType", "SET 값에는 쉼표를 넣을 수 없습니다.")
+        if any(key in column for key in ("length", "precision", "scale")):
+            fail(path, "ENUM/SET에는 길이·정밀도를 지정하지 않습니다.")
+        column["dataType"] = choice[1].upper() + "(" + ",".join(labels) + ")"
+        return
     value = original.strip().upper()
     # 기존 PostgreSQL 예시의 의미 변환을 응답에 명시합니다.
-    value = {"INTEGER": "INT", "TIMESTAMPTZ": "DATETIME", "JSONB": "JSON"}.get(value, value)
-    match = re.fullmatch(r"(VARCHAR|DECIMAL|DATETIME)\((\d+)(?:\s*,\s*(\d+))?\)", value)
+    value = {"INTEGER": "INT", "TIMESTAMPTZ": "DATETIME", "JSONB": "JSON", "BOOL": "BOOLEAN",
+             "NUMERIC": "DECIMAL", "DEC": "DECIMAL", "FIXED": "DECIMAL",
+             "DOUBLE PRECISION": "DOUBLE", "REAL": "DOUBLE"}.get(value, value)
+    value = re.sub(r"^(INTEGER|NUMERIC|DEC|FIXED)(?=\s*\(| UNSIGNED$)",
+                   lambda m: "INT" if m[1] == "INTEGER" else "DECIMAL", value)
+    unsigned = value.endswith(" UNSIGNED")
+    if unsigned:
+        value = value[:-9].strip()
+    match = re.fullmatch(r"(CHAR|VARCHAR|BINARY|VARBINARY|BIT|DECIMAL|DATETIME|TIME|TIMESTAMP)\s*\((\d+)(?:\s*,\s*(\d+))?\)", value)
     if match:
         value = match[1]
-        if value == "VARCHAR":
+        if value in {"CHAR", "VARCHAR", "BINARY", "VARBINARY", "BIT"}:
             if match[3] is not None:
-                fail(path, "VARCHAR에는 길이만 지정합니다.")
+                fail(path, "해당 자료형에는 길이만 지정합니다.")
             if "length" in column and column["length"] != int(match[2]):
                 fail(path + ".length", "자료형 표기와 길이가 다릅니다.")
             column.setdefault("length", int(match[2]))
@@ -135,33 +159,40 @@ def data_type(column, path, conversions):
             column.setdefault("scale", int(match[3] or 0))
         else:
             if match[3] is not None:
-                fail(path, "DATETIME에는 소수초 정밀도만 지정합니다.")
+                fail(path, "시간 자료형에는 소수초 정밀도만 지정합니다.")
             if "precision" in column and column["precision"] != int(match[2]):
                 fail(path + ".precision", "자료형 표기와 정밀도가 다릅니다.")
             column.setdefault("precision", int(match[2]))
-    if value not in {"INT", "BIGINT", "VARCHAR", "TEXT", "BOOLEAN", "DATE", "DATETIME", "DECIMAL", "UUID", "JSON"}:
+    numeric = {"TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "DECIMAL", "FLOAT", "DOUBLE"}
+    supported = numeric | {"CHAR", "VARCHAR", "BINARY", "VARBINARY", "BIT", "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT",
+        "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB", "BOOLEAN", "DATE", "TIME", "DATETIME", "TIMESTAMP", "YEAR", "UUID", "JSON", "INET4", "INET6",
+        "GEOMETRY", "POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION"}
+    if value not in supported or (unsigned and value not in numeric):
         fail(path + ".dataType", "지원하지 않는 자료형입니다.")
-    if value == "VARCHAR":
-        integer(column.get("length"), path + ".length", 1, 16383)
+    lengths = {"CHAR": (1, 255), "VARCHAR": (1, 16383), "BINARY": (1, 255), "VARBINARY": (1, 65532), "BIT": (1, 64)}
+    if value in lengths:
+        if value in {"CHAR", "BINARY", "BIT"}:
+            column.setdefault("length", 1)
+        integer(column.get("length"), path + ".length", *lengths[value])
     elif "length" in column:
-        fail(path + ".length", "VARCHAR에만 길이를 지정합니다.")
+        fail(path + ".length", "해당 자료형에는 길이를 지정할 수 없습니다.")
     if value == "DECIMAL":
         precision = integer(column.get("precision"), path + ".precision", 1, 65)
-        integer(column.get("scale", 0), path + ".scale", 0, min(30, precision))
+        integer(column.get("scale", 0), path + ".scale", 0, min(38, precision))
         column.setdefault("scale", 0)
-    elif value == "DATETIME":
+    elif value in {"DATETIME", "TIME", "TIMESTAMP"}:
         if original.strip().upper() == "TIMESTAMPTZ":
             column.setdefault("precision", 6)
         if "precision" in column:
             integer(column["precision"], path + ".precision", 0, 6)
         if "scale" in column:
-            fail(path + ".scale", "DATETIME에는 scale을 지정하지 않습니다.")
+            fail(path + ".scale", "시간 자료형에는 scale을 지정하지 않습니다.")
     elif "precision" in column or "scale" in column:
         fail(path, "해당 자료형에 정밀도를 지정할 수 없습니다.")
-    column["dataType"] = value
+    column["dataType"] = value + (" UNSIGNED" if unsigned else "")
     if original != value or value == "UUID":
         conversions.append({"path": path + ".dataType", "from": original,
-            "to": "CHAR(36)" if value == "UUID" else "JSON" if value == "JSON" else value,
+            "to": "CHAR(36)" if value == "UUID" else column["dataType"],
             "message": "UTC 의미·길이·정밀도와 MariaDB 출력 변환을 확인해 주세요."})
 
 

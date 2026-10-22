@@ -6,7 +6,7 @@ from hashlib import sha256
 import json
 import logging
 from pathlib import Path
-from threading import Barrier, Event
+from threading import Barrier, Event, local
 from time import time
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
@@ -24,10 +24,10 @@ import jwt
 import pytest
 from redis.exceptions import ConnectionError
 from sqlalchemy import select, func, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 from app.errors import (GoogleAuthenticationFailed, GoogleLinkRequired, IdentityConflict,
-                        AuthenticationUnavailable)
+                        AuthenticationUnavailable, AuthenticationRequired)
 from app.extensions import db
 from app.models import AppUser, UserIdentity, ProjectDocument, utc_now
 from app.repositories import identity_repository
@@ -651,7 +651,7 @@ def test_mariadb_unlinked_google_does_not_query_or_lock_email_candidates(google_
 
 @pytest.mark.mariadb
 @pytest.mark.parametrize("same_subject", [True, False])
-def test_mariadb_two_accounts_cannot_claim_same_subject_but_case_is_preserved(google_app, same_subject):
+def test_mariadb_two_accounts_cannot_claim_same_subject_but_case_is_preserved(google_app, same_subject, record_testsuite_property):
     app = google_app.app
     claims = []
     for login_id in ("auth-a", "auth-b"):
@@ -659,6 +659,23 @@ def test_mariadb_two_accounts_cannot_claim_same_subject_but_case_is_preserved(go
         with app.app_context():
             claims.append(decode_token(token))
     barrier = Barrier(2)
+    locked = Barrier(2)
+    thread = local()
+    errors = []
+    original_lookup = identity_repository.identity
+    original_transaction = service._connect_identity_transaction
+    def lookup(*args, **kwargs):
+        result = original_lookup(*args, **kwargs)
+        if kwargs.get("lock") and kwargs.get("subject") and not getattr(thread, "observed", False):
+            thread.observed = True
+            locked.wait(timeout=10)
+        return result
+    def transaction(*args, **kwargs):
+        try:
+            return original_transaction(*args, **kwargs)
+        except OperationalError as error:
+            errors.append(error.orig.args[0])
+            raise
     def connect(index):
         with app.app_context():
             barrier.wait(timeout=10)
@@ -668,7 +685,54 @@ def test_mariadb_two_accounts_cannot_claim_same_subject_but_case_is_preserved(go
                     {"sub": subject, "email_verified": False}, user_id=claims[index]["sub"], session_id=claims[index]["sid"]).id
             except IdentityConflict:
                 return "conflict"
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with patch.object(identity_repository, "identity", side_effect=lookup), \
+            patch.object(service, "_connect_identity_transaction", side_effect=transaction), \
+            ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(connect, range(2)))
+    record_testsuite_property(f"mysql_error_codes_same_subject_{same_subject}", json.dumps(errors))
     assert results.count("conflict") == (1 if same_subject else 0)
     assert len(identity_rows(app)) == (1 if same_subject else 2)
+
+
+@pytest.mark.parametrize("code", [1205, 1213])
+def test_identity_transient_failure_rolls_back_insert_before_retry(google_app, code):
+    app = google_app.app
+    token = login(app.test_client()).json["data"]["accessToken"]
+    with app.app_context():
+        claims = decode_token(token)
+        original = identity_repository.insert
+        calls = []
+        def insert(*args):
+            original(*args)
+            calls.append(True)
+            if len(calls) == 1:
+                raise OperationalError("test", {}, Exception(code, "transient"))
+        with patch.object(identity_repository, "insert", side_effect=insert):
+            actor = service.connect_identity(db.session.session_factory, app.extensions["token_repository"],
+                {"sub": "RetrySubject", "email_verified": False}, user_id=claims["sub"], session_id=claims["sid"])
+        assert actor.id == claims["sub"] and len(calls) == 2
+    assert len(identity_rows(app)) == 1
+
+
+@pytest.mark.parametrize(("code", "expected", "count"), [(1213, IdentityConflict, 3), (2006, OperationalError, 1)])
+def test_identity_retry_is_bounded_and_unrelated_errors_are_not_retried(code, expected, count):
+    error = OperationalError("test", {}, Exception(code, "controlled"))
+    with patch.object(service, "_connect_identity_transaction", side_effect=error) as operation:
+        with pytest.raises(expected):
+            service.connect_identity(None, None, {"sub": "RetrySubject"})
+    assert operation.call_count == count
+
+
+def test_identity_retry_rechecks_revoked_session_and_keeps_database_empty(google_app):
+    app = google_app.app
+    token = login(app.test_client()).json["data"]["accessToken"]
+    with app.app_context():
+        claims = decode_token(token)
+        tokens = app.extensions["token_repository"]
+        error = OperationalError("test", {}, Exception(1213, "transient"))
+        with patch.object(identity_repository, "insert", side_effect=error), \
+                patch.object(tokens, "is_active", side_effect=[True, False]):
+            with pytest.raises(AuthenticationRequired):
+                service.connect_identity(db.session.session_factory, tokens,
+                    {"sub": "RetrySubject", "email_verified": False}, user_id=claims["sub"], session_id=claims["sid"])
+    assert identity_rows(app) == []

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Database, Link2 } from 'lucide-react';
 import type { ErdTable, ErdColumn, FeatureSpec, LinterIssue, SqlDialect } from '../types/index.ts';
 import { runErdLinter } from '../utils/erdLinter.ts';
-import { COMMON_DATA_TYPES } from './step4/erdConfig.ts';
 import { ErdSidebarToolbar } from './step4/ErdSidebarToolbar.tsx';
 import { TableTabs } from './step4/TableTabs.tsx';
 import { TableDetail } from './step4/TableDetail.tsx';
@@ -69,8 +68,11 @@ export const Step4ErdStudio: React.FC<Step4ErdStudioProps> = ({
 
   const handleAddNewColumn = (tableId: string) => {
     if (isLocked) return;
+    const names = new Set(tables.find((table) => table.id === tableId)?.columns.map((column) => column.name.toLowerCase()));
+    let name = 'new_column';
+    for (let suffix = 2; names.has(name); suffix += 1) name = `new_column_${suffix}`;
     onAddColumn(tableId, {
-      name: 'new_column',
+      name,
       dataType: 'VARCHAR(100)',
       isPrimaryKey: false,
       isForeignKey: false,
@@ -165,11 +167,13 @@ export const Step4ErdStudio: React.FC<Step4ErdStudioProps> = ({
           {/* [ERD 설계] 테이블 상세와 컬럼 표 */}
           {selectedTable ? (
             <TableDetail
+              targetDbms={targetDbms}
               table={selectedTable}
               tables={tables}
               features={features}
               isLocked={isLocked}
               onRenameTable={onRenameTable}
+              onUpdateTable={onUpdateTable}
               onDeleteTable={onDeleteTable}
               onAddNewColumn={handleAddNewColumn}
               onUpdateColumn={onUpdateColumn}
@@ -217,6 +221,7 @@ export const Step4ErdStudio: React.FC<Step4ErdStudioProps> = ({
       {/* [ERD 설계] 테이블 추가 모달 */}
       <AddTableModal
         open={showAddTableModal}
+        tables={tables}
         features={features}
         targetDbms={targetDbms}
         isLocked={isLocked}
@@ -233,12 +238,6 @@ export const Step4ErdStudio: React.FC<Step4ErdStudioProps> = ({
         onClose={() => setShowSqlDrawer(false)}
       />
 
-      {/* [ERD 설계] 자주 쓰는 데이터 타입 목록 */}
-      <datalist id="datatype-suggestions">
-        {COMMON_DATA_TYPES.map((dt) => (
-          <option key={dt} value={dt} />
-        ))}
-      </datalist>
     </div>
   );
 };

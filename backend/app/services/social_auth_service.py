@@ -1,7 +1,7 @@
 """Google 연결·본인 재인증 후 이메일 저장의 업무와 DB 트랜잭션입니다."""
 import re
 import secrets
-from time import time
+from time import sleep, time
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 
@@ -45,36 +45,49 @@ def _conflict(error):
 
 
 def connect_identity(session_factory, tokens, profile, *, user_id=None, session_id=None):
-    try:
-        with session_factory.begin() as session:
-            known = identities.identity(session, subject=profile["sub"])
-            if user_id is None and known:
-                candidate_id = known.user_id
-            elif user_id is not None:
-                candidate_id = user_id
-            else:
-                # 공개 가입의 이메일은 소유권 증명이 아니므로 계정 연결에 사용하지 않습니다.
-                raise GoogleLinkRequired()
-            user = identities.user_by_id(session, candidate_id)
-            actor = _actor(user)
-            # 잠금 대기 뒤 최신 identity와 이메일을 다시 확인합니다.
-            known = identities.identity(session, subject=profile["sub"], lock=True)
-            owned = identities.identity(session, user_id=user.id, lock=True)
-            if known and known.user_id != user.id or owned and owned.subject != profile["sub"]:
-                raise IdentityConflict()
-            if user_id is not None:
-                if not tokens.is_active(session_id, user_id):
-                    raise AuthenticationRequired()
-            elif known is None:
-                raise GoogleLinkRequired()
-            if known is None:
-                identities.insert(session, user.id, profile)
-            else:
-                known.email = profile.get("email")
-                known.email_verified = profile.get("email_verified") is True
-            return actor
-    except (IntegrityError, OperationalError) as error:
-        _conflict(error)
+    for attempt in range(3):
+        try:
+            return _connect_identity_transaction(session_factory, tokens, profile,
+                                                 user_id=user_id, session_id=session_id)
+        except OperationalError as error:
+            # 없는 identity의 gap lock 경쟁은 서로 다른 계정 연결에서도 일시적으로 발생한다.
+            code = getattr(error.orig, "args", [None])[0]
+            if code in {1205, 1213} and attempt < 2:
+                sleep(0.01 * (attempt + 1))
+                continue
+            _conflict(error)
+        except IntegrityError as error:
+            _conflict(error)
+
+
+def _connect_identity_transaction(session_factory, tokens, profile, *, user_id=None, session_id=None):
+    with session_factory.begin() as session:
+        known = identities.identity(session, subject=profile["sub"])
+        if user_id is None and known:
+            candidate_id = known.user_id
+        elif user_id is not None:
+            candidate_id = user_id
+        else:
+            # 공개 가입의 이메일은 소유권 증명이 아니므로 계정 연결에 사용하지 않는다.
+            raise GoogleLinkRequired()
+        user = identities.user_by_id(session, candidate_id)
+        actor = _actor(user)
+        # 재시도마다 새 트랜잭션에서 현재 identity·이메일·세션을 다시 확인한다.
+        known = identities.identity(session, subject=profile["sub"], lock=True)
+        owned = identities.identity(session, user_id=user.id, lock=True)
+        if known and known.user_id != user.id or owned and owned.subject != profile["sub"]:
+            raise IdentityConflict()
+        if user_id is not None:
+            if not tokens.is_active(session_id, user_id):
+                raise AuthenticationRequired()
+        elif known is None:
+            raise GoogleLinkRequired()
+        if known is None:
+            identities.insert(session, user.id, profile)
+        else:
+            known.email = profile.get("email")
+            known.email_verified = profile.get("email_verified") is True
+        return actor
 
 
 def finish_google(session_factory, tokens, states, provider, *, state, binding, code=None, cancelled=False):

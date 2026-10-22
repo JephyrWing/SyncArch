@@ -7,6 +7,14 @@ export interface FkReference {
   columnName: string;
 }
 
+/** [ERD 설계] 기능 삭제는 컬럼을 유지하며 테이블·컬럼의 기능 연결만 함께 해제한다. */
+export const unlinkFeature = (tables: ErdTable[], featureId: string): ErdTable[] => tables.map((table) => ({
+  ...table,
+  relatedFeatureIds: table.relatedFeatureIds.filter((id) => id !== featureId),
+  columns: table.columns.map((column) => column.relatedFeatureId === featureId
+    ? { ...column, relatedFeatureId: undefined } : column),
+}));
+
 // [ERD 설계] FK 참조는 "table.column" 텍스트로 저장되고(02 설계: 이름 기반 호환 유지)
 // erdLinter·sqlGenerator와 같이 대소문자를 구분하지 않고 비교한다.
 const parseReference = (reference: string): [string, string] => {
