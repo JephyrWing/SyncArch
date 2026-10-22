@@ -5,6 +5,7 @@ import { toPayload, toProjectData, toSaveBody } from '../adapters/projectAdapter
 import { describeChanges, diffPayload, type DocumentChange } from '../utils/documentDiff.ts';
 import { mergeProject } from '../utils/mergeDocument.ts';
 import type { DocumentView, ProjectData } from '../types/index.ts';
+import { isAccessError, type ProjectAccess } from './useProjectAccess.ts';
 
 // [문서 저장] 02 설계 편집 상태 전이에 'invalid'(422, 다음 편집으로 해결)와 'readonly'(보관·권한 없음)를 더했다.
 // [협업 상태] 버전 충돌은 자동 병합으로 풀기 때문에 'conflict' 상태는 없다.
@@ -48,7 +49,7 @@ const describeFieldError = (error: ApiError, project: ProjectData | null): strin
  */
 export const useProjectDocument = (
   projectId: string | null,
-  options: { onRemoteChange: (change: RemoteChange) => void; onAuthExpired: () => void }
+  options: { onRemoteChange: (change: RemoteChange) => void; onAuthExpired: () => void; access: ProjectAccess }
 ) => {
   const [project, setProject] = useState<ProjectData | null>(null);
   const [status, setStatusState] = useState<SaveStatus>('loading');
@@ -68,6 +69,8 @@ export const useProjectDocument = (
   // [문서 저장] 불러오기·프로젝트 전환 때마다 올려서, 이전 프로젝트의 늦은 응답을 무시한다.
   const generationRef = useRef(0);
   const timerRef = useRef<number | undefined>(undefined);
+  const readRef = useRef<{ generation: number; promise: Promise<DocumentView | null> } | null>(null);
+  const conflictCountRef = useRef(0);
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
@@ -76,6 +79,40 @@ export const useProjectDocument = (
     setStatusState(next);
     setMessage(text);
   };
+
+  const readDocument = async (id: string, generation: number, knownVersion?: number) => {
+    const previous = readRef.current;
+    if (previous?.generation === generation) await previous.promise.catch(() => undefined);
+    optionsRef.current.access.check();
+    if (generation !== generationRef.current) return null;
+    const reading = { generation, promise: fetchDocument(id, knownVersion) };
+    readRef.current = reading;
+    try {
+      return await reading.promise;
+    } finally {
+      if (readRef.current === reading) readRef.current = null;
+    }
+  };
+
+  const stopForAccess = (error: unknown) => {
+    if (!isAccessError(error)) return false;
+    optionsRef.current.access.stop(error);
+    return true;
+  };
+
+  // [문서 저장] 다른 협업 요청의 권한 오류도 즉시 반영하고, 진행 중 요청의 늦은 응답으로 초안을 덮지 않는다.
+  useEffect(() => options.access.subscribe(() => {
+    const error = options.access.getError();
+    if (!error) return;
+    const unsaved = revisionRef.current !== savedRevisionRef.current || Boolean(inFlightRef.current || failedRef.current);
+    failedRef.current = inFlightRef.current ?? failedRef.current;
+    inFlightRef.current = null;
+    generationRef.current += 1;
+    window.clearTimeout(timerRef.current);
+    setStatus(unsaved ? 'failed' : projectRef.current ? 'readonly' : 'error',
+      `${error.message} 연결을 중단했습니다.${unsaved ? ' 저장되지 않은 내 변경을 백업한 뒤 다시 로그인하거나 권한을 확인하세요.' : ' 다시 로그인하거나 프로젝트 권한을 확인하세요.'}`);
+    if (!projectRef.current && error.status === 401) optionsRef.current.onAuthExpired();
+  }), [options.access]);
 
   const apply = (view: DocumentView) => {
     const next = toProjectData(view, 1);
@@ -88,6 +125,7 @@ export const useProjectDocument = (
     revisionRef.current = 0;
     savedRevisionRef.current = 0;
     failedRef.current = null;
+    conflictCountRef.current = 0;
     if (view.project.archivedAt) setStatus('readonly', '보관된 프로젝트입니다. 읽기와 내보내기만 할 수 있습니다.');
     else setStatus('clean');
   };
@@ -109,7 +147,7 @@ export const useProjectDocument = (
       setStatus('clean');
     } else {
       setStatus('dirty');
-      schedule();
+      schedule(Math.min(2000, SAVE_DELAY_MS * 2 ** conflictCountRef.current));
     }
   };
 
@@ -127,38 +165,48 @@ export const useProjectDocument = (
     const id = projectIdRef.current;
     if (!id) return;
     try {
-      const view = await fetchDocument(id);
-      if (!view || generation !== generationRef.current) return;
+      const view = await readDocument(id, generation);
+      if (!view || generation !== generationRef.current || optionsRef.current.access.isStopped()) return;
       notifyRemote(view);
       // [협업 상태] 그 사이 보관됐다면 다시 저장이 403으로 실패하고 백업 안내가 뜬다.
       mergeRemote(view);
     } catch (error) {
       if (generation !== generationRef.current) return;
+      if (stopForAccess(error)) return;
       setStatus('failed', `팀원 변경을 받지 못해 저장하지 못했습니다. ${(error as Error).message}`);
     }
   };
 
   const load = async () => {
     const id = projectIdRef.current;
-    if (!id) return;
+    if (!id || optionsRef.current.access.isStopped()) return;
     const generation = ++generationRef.current;
     window.clearTimeout(timerRef.current);
     inFlightRef.current = null;
+    if (projectRef.current?.id !== id) {
+      projectRef.current = null;
+      setProject(null);
+      baseRef.current = null;
+      failedRef.current = null;
+      revisionRef.current = savedRevisionRef.current = 0;
+      versionRef.current = 0;
+      setVersion(0);
+      conflictCountRef.current = 0;
+    }
     notifiedVersionRef.current = 0;
     setStatus('loading');
     try {
-      const view = await fetchDocument(id);
-      if (generation === generationRef.current && view) apply(view);
+      const view = await readDocument(id, generation);
+      if (generation === generationRef.current && view && !optionsRef.current.access.isStopped()) apply(view);
     } catch (error) {
       if (generation !== generationRef.current) return;
-      if (error instanceof ApiError && error.status === 401) optionsRef.current.onAuthExpired();
-      else setStatus('error', (error as Error).message);
+      if (!stopForAccess(error)) setStatus('error', (error as Error).message);
     }
   };
 
   const send = async (pending: PendingSave) => {
     const id = projectIdRef.current;
-    if (!id) return;
+    if (!id || optionsRef.current.access.isStopped()) return;
     const generation = generationRef.current;
     inFlightRef.current = pending;
     setStatus('saving');
@@ -167,6 +215,7 @@ export const useProjectDocument = (
       if (generation !== generationRef.current) return;
       inFlightRef.current = null;
       failedRef.current = null;
+      conflictCountRef.current = 0;
       versionRef.current = result.version;
       notifiedVersionRef.current = Math.max(notifiedVersionRef.current, result.version);
       setVersion(result.version);
@@ -193,10 +242,18 @@ export const useProjectDocument = (
       if (generation !== generationRef.current) return;
       inFlightRef.current = null;
       const apiError = error instanceof ApiError ? error : new ApiError(0, 'INTERNAL_ERROR', String(error));
+      if (isAccessError(apiError)) {
+        failedRef.current = pending;
+        stopForAccess(apiError);
+        return;
+      }
       if (apiError.code === 'VERSION_CONFLICT') {
         // [협업 상태] 최신본을 못 받으면 '다시 시도'가 같은 요청을 보내고, 다시 409를 받아 병합을 재시도한다.
         failedRef.current = pending;
-        rebase(generation);
+        conflictCountRef.current += 1;
+        if (conflictCountRef.current >= 3) {
+          setStatus('failed', '동시 변경이 반복되어 자동 저장을 멈췄습니다. 내 변경은 유지됩니다. 잠시 후 다시 시도하거나 백업하세요.');
+        } else rebase(generation);
       } else if (apiError.status === 422 || apiError.status === 413 || apiError.status === 409) {
         setStatus('invalid', describeFieldError(apiError, projectRef.current));
       } else if (apiError.status === 403) {
@@ -217,7 +274,7 @@ export const useProjectDocument = (
   const save = () => {
     window.clearTimeout(timerRef.current);
     const current = projectRef.current;
-    if (!current || inFlightRef.current) return;
+    if (!current || inFlightRef.current || optionsRef.current.access.isStopped()) return;
     if (statusRef.current !== 'dirty' && statusRef.current !== 'invalid') return;
     if (revisionRef.current === savedRevisionRef.current) {
       setStatus('clean');
@@ -226,9 +283,9 @@ export const useProjectDocument = (
     send({ body: toSaveBody(current, versionRef.current, crypto.randomUUID()), revision: revisionRef.current, snapshot: current });
   };
 
-  const schedule = () => {
+  const schedule = (delay = SAVE_DELAY_MS) => {
     window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(save, SAVE_DELAY_MS);
+    timerRef.current = window.setTimeout(save, delay);
   };
 
   const update = (fields: Partial<ProjectData>) => {
@@ -246,6 +303,8 @@ export const useProjectDocument = (
   };
 
   const retry = () => {
+    if (optionsRef.current.access.isStopped()) return;
+    conflictCountRef.current = 0;
     if (failedRef.current && !inFlightRef.current) send(failedRef.current);
   };
 
@@ -264,16 +323,21 @@ export const useProjectDocument = (
 
   useEffect(() => {
     projectIdRef.current = projectId;
-    if (!projectId) return;
+    if (!projectId) {
+      projectRef.current = null;
+      setProject(null);
+      setStatus('loading');
+      return;
+    }
     load();
 
     const poll = async () => {
       const generation = generationRef.current;
       const state = statusRef.current;
-      if (document.hidden || inFlightRef.current || state === 'loading' || state === 'error') return;
+      if (optionsRef.current.access.isStopped() || document.hidden || readRef.current?.generation === generation || inFlightRef.current || state === 'loading' || state === 'error') return;
       try {
-        const view = await fetchDocument(projectId, versionRef.current);
-        if (!view || generation !== generationRef.current || view.version <= versionRef.current || inFlightRef.current) return;
+        const view = await readDocument(projectId, generation, versionRef.current);
+        if (!view || generation !== generationRef.current || optionsRef.current.access.isStopped() || view.version <= versionRef.current || inFlightRef.current) return;
         notifyRemote(view);
         const current = statusRef.current;
         if (current === 'clean' || current === 'readonly') apply(view);
@@ -282,18 +346,18 @@ export const useProjectDocument = (
       } catch (error) {
         // [구글 로그인] 세션이 끝났는데 화면만 남아 있으면 팀원 변경을 못 받는다. 잃을 편집이 없을 때만 로그인 화면으로 보낸다.
         // [구글 로그인] 이전 화면에서 보낸 요청의 늦은 401이 새로 로그인한 화면을 로그아웃시키지 않게 세대를 확인한다.
-        if (generation === generationRef.current && error instanceof ApiError && error.status === 401 && SAFE_TO_LEAVE.includes(statusRef.current)) {
-          optionsRef.current.onAuthExpired();
-        }
+        if (generation === generationRef.current) stopForAccess(error);
         // [협업 상태] 그 밖의 폴링 실패는 일시적이라 다음 주기나 창 포커스 때 다시 시도한다.
       }
     };
 
     const timer = window.setInterval(poll, POLL_MS);
     window.addEventListener('focus', poll);
+    window.addEventListener('online', poll);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('focus', poll);
+      window.removeEventListener('online', poll);
       window.clearTimeout(timerRef.current);
       generationRef.current += 1;
     };
@@ -308,7 +372,12 @@ export const useProjectDocument = (
     version,
     update,
     retry,
+    resumeSaving: () => schedule(),
     reloadLatest: load,
+    reconnect: () => {
+      if (!SAFE_TO_LEAVE.includes(statusRef.current) && !window.confirm('저장되지 않은 초안은 새로고침하면 사라집니다. 먼저 내 변경을 백업하세요. 백업했거나 초안을 버리고 다시 연결할까요?')) return;
+      window.location.reload();
+    },
     downloadBackup,
   };
 };

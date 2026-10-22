@@ -19,7 +19,7 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       // [앱 설정] 프론트 코드는 /api 상대 URL을 쓰고, 개발 중에는 Flask가 5000 포트에서 처리한다.
       proxy: {
-        '/api': 'http://127.0.0.1:5000',
+        '/api': process.env.API_PROXY_TARGET || 'http://127.0.0.1:5000',
       },
     },
   };
