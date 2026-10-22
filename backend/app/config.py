@@ -63,6 +63,7 @@ def load_config():
     return {
         **external_config(app_env, origins),
         "APP_ENV": app_env,
+        "RELEASE_SHA": os.getenv("RELEASE_SHA", "development"),
         "FRONTEND_DIST": Path(__file__).resolve().parents[2] / "frontend" / "dist",
         "DEBUG": False,
         "SECRET_KEY": secret_key or secrets.token_hex(32),

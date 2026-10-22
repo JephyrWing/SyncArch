@@ -10,6 +10,10 @@ JWT 인증·Redis RT 회전과 프로젝트·멤버·문서 원자 저장·활�
 
 ## 구조
 
+GitHub Actions의 네 필수 검사와 Cloudtype 배포 설정은
+[CI/CD 운영 안내](docs/cloudtype-cicd.md)에 있습니다.
+develop/PR에서는 검사만 수행하고, 네 검사를 통과한 main push에서 같은 산출물을 배포합니다.
+
 ```text
 frontend/
   src/                       기존 React 프로토타입
