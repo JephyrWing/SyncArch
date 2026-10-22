@@ -464,3 +464,85 @@ def test_mobile_tree_scroll_and_derived_form_reuse(idea_editor):
         page.screenshot(path=str(ROOT / ".local/w07a-tree-mobile.png"))
     finally:
         ctx.close()
+
+
+def test_title_only_root_create_edit_delete_survives_reload(idea_editor):
+    """TC-IDEA-01: 제목만 루트 생성→같은 UUID 편집→삭제를 실제 폼에서 확인한다."""
+    ctx, page = idea_editor["open"]("auth-b")
+    try:
+        before = idea_editor["read"]()
+        page.get_by_label("새 아이디어 제목", exact=True).fill("제목만 루트")
+        page.get_by_role("button", name="아이디어 등록", exact=True).click()
+        applied(page)
+        created = next(card for card in idea_editor["read"]()["payload"]["ideas"] if card["title"] == "제목만 루트")
+        assert str(UUID(created["id"])) == created["id"]
+        assert created["parentIdeaId"] is None and created["description"] == ""
+        page.reload()
+        page.get_by_role("button", name="W07A 화면 검증", exact=False).click()
+        node = tree_node(page, created["id"])
+        expect(node).to_be_visible()
+        node.get_by_role("button", name="수정", exact=True).click()
+        modal = page.get_by_role("dialog", name="아이디어 수정")
+        modal.get_by_label("제목 (필수)", exact=True).fill("수정한 루트")
+        modal.get_by_role("button", name="적용", exact=True).click()
+        applied(page)
+        assert next(card for card in idea_editor["read"]()["payload"]["ideas"] if card["id"] == created["id"])["title"] == "수정한 루트"
+        page.get_by_title("삭제", exact=True).last.click()
+        page.get_by_role("dialog", name="아이디어 삭제 영향 확인").get_by_role("button", name="하위 포함 삭제", exact=True).click()
+        applied(page)
+        page.reload()
+        page.get_by_role("button", name="W07A 화면 검증", exact=False).click()
+        expect(tree_node(page, created["id"])).to_have_count(0)
+        assert idea_editor["read"]()["payload"]["ideas"] == before["payload"]["ideas"]
+    finally:
+        ctx.close()
+
+
+def test_two_accounts_vote_comment_and_tab_drafts_preserve_identity(idea_editor):
+    """TC-IDEA-03/AUTH-02: 겹친 투표·댓글 저장과 개인 댓글 초안을 확인한다."""
+    first, page = idea_editor["open"]()
+    second, other = idea_editor["open"]("auth-b")
+    try:
+        root, _, _, different = idea_editor["ids"]
+        original = idea_editor["read"]()["payload"]["ideas"][0]
+        a, b = tree_node(page, root), tree_node(other, root)
+        a.get_by_title("팀원 +1 투표", exact=True).click()
+        applied(page)
+        expect(b.get_by_title("팀원 +1 투표", exact=True)).to_contain_text("+0", timeout=15000)
+        b.get_by_title("팀원 +1 투표", exact=True).click()
+        a.get_by_title("팀원 +1 투표", exact=True).click()
+        expect(a.get_by_title("팀원 +1 투표", exact=True)).to_contain_text("+2", timeout=15000)
+        expect(b.get_by_title("팀원 +1 투표", exact=True)).to_contain_text("+2", timeout=15000)
+        voted = idea_editor["read"]()["payload"]["ideas"][0]
+        assert len(set(voted["voterIds"])) == len(voted["voterIds"]) == 2
+        a.get_by_title("팀원 +1 투표", exact=True).click()
+        b.get_by_title("팀원 +1 투표", exact=True).click()
+        expect(a.get_by_title("팀원 +1 투표", exact=True)).to_contain_text("+0", timeout=15000)
+        expect(b.get_by_title("팀원 +1 투표", exact=True)).to_contain_text("+0", timeout=15000)
+        a.get_by_role("button", name="댓글 (1)", exact=True).click()
+        a.get_by_placeholder("코멘트 남기기...").fill("A 댓글 초안")
+        page.get_by_role("tab", name="기술적 제약", exact=False).click()
+        tree_node(page, different).get_by_role("button", name="댓글 (0)", exact=True).click()
+        expect(tree_node(page, different).get_by_placeholder("코멘트 남기기...")).to_have_value("")
+        page.get_by_role("tab", name="핵심 문제", exact=False).click()
+        a.get_by_role("button", name="댓글 (1)", exact=True).click()
+        expect(a.get_by_placeholder("코멘트 남기기...")).to_have_value("A 댓글 초안")
+        b.get_by_role("button", name="댓글 (1)", exact=True).click()
+        b.get_by_placeholder("코멘트 남기기...").fill("B 댓글")
+        a.get_by_role("button", name="등록", exact=True).click()
+        b.get_by_role("button", name="등록", exact=True).click()
+        expect(a.get_by_role("button", name="댓글 (3)", exact=True)).to_be_visible(timeout=15000)
+        expect(b.get_by_role("button", name="댓글 (3)", exact=True)).to_be_visible(timeout=15000)
+        card = idea_editor["read"]()["payload"]["ideas"][0]
+        assert not card["voterIds"] and card["authorId"] == original["authorId"]
+        comments = {comment["text"]: comment for comment in card["comments"]}
+        assert comments["A 댓글 초안"]["authorId"] == original["authorId"]
+        assert comments["B 댓글"]["authorId"] != original["authorId"]
+        assert all(comments[text]["createdAt"].endswith("Z") for text in ("A 댓글 초안", "B 댓글"))
+        page.reload()
+        page.get_by_role("button", name="W07A 화면 검증", exact=False).click()
+        expect(tree_node(page, root).get_by_role("button", name="댓글 (3)", exact=True)).to_be_visible()
+        assert idea_editor["read"]()["payload"]["ideas"][0] == card
+    finally:
+        first.close()
+        second.close()
