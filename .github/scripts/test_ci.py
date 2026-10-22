@@ -3,9 +3,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from check_junit import validate
-from deploy import render
+from deploy import preflight, render
 
 
 class ReleaseGateTests(unittest.TestCase):
@@ -44,6 +45,23 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual(backend['resources']['replicas'], 1)
         self.assertTrue(all(set(env) == {'name', 'secret'} for env in backend['options']['env']))
         self.assertNotIn('mariadb', json.dumps(docs))
+
+    def test_non_main_events_cannot_deploy(self):
+        environment = {'CLOUDTYPE_TOKEN': 'test-only', 'DEPLOY_URL': 'https://example.com',
+                       'SMOKE_LOGIN_ID': 'test-only', 'SMOKE_PASSWORD': 'test-only',
+                       'GITHUB_REF': 'refs/heads/develop', 'GITHUB_EVENT_NAME': 'push'}
+        with patch.dict('os.environ', environment, clear=True), patch('subprocess.check_output') as remote:
+            with self.assertRaisesRegex(ValueError, 'main pushes'):
+                preflight()
+            remote.assert_not_called()
+
+    def test_superseded_main_cannot_deploy(self):
+        environment = {'CLOUDTYPE_TOKEN': 'test-only', 'DEPLOY_URL': 'https://example.com',
+                       'SMOKE_LOGIN_ID': 'test-only', 'SMOKE_PASSWORD': 'test-only',
+                       'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push', 'GITHUB_SHA': 'a'*40}
+        with patch.dict('os.environ', environment, clear=True), patch('subprocess.check_output', return_value='b'*40 + '\trefs/heads/main'):
+            with self.assertRaisesRegex(ValueError, 'Superseded release'):
+                preflight()
 
 
 if __name__ == '__main__':
