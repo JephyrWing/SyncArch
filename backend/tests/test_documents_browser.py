@@ -2,6 +2,8 @@
 from copy import deepcopy
 from uuid import uuid4
 
+import pytest
+
 from test_auth import auth_app
 from test_auth_browser import browser_session, open_page, sign_in
 
@@ -21,6 +23,7 @@ def save_request(document):
         "payload": deepcopy(document["payload"])}
 
 
+@pytest.mark.deployment_smoke
 def test_browser_two_accounts_save_conflict_replay_reload_activity_and_removal(browser_session):
     browser, origin = browser_session
     first, second = browser.new_context(), browser.new_context()

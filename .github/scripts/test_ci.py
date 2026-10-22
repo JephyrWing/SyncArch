@@ -32,7 +32,7 @@ class ReleaseGateTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             validate('nonexistent-required-report.xml')
 
-    def test_deployment_rejects_mutable_git_refs(self):
+    def test_release_revision_requires_a_full_commit_sha(self):
         for ref in ('main', 'refs/heads/main', 'latest', 'a'*39, 'A'*40, None):
             with self.subTest(ref=ref), self.assertRaises(ValueError):
                 render(ref)
@@ -42,7 +42,7 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual([doc['name'] for doc in docs], ['syncarch-api', 'syncarch-web'])
         for doc in docs:
             self.assertEqual(doc['app'], 'dockerfile')
-            self.assertEqual(doc['context']['git']['ref'], 'a'*40)
+            self.assertEqual(doc['context']['git']['ref'], 'main')
             self.assertEqual(doc['context']['path'], '/')
             self.assertNotIn('image', doc['options'])
             self.assertEqual(doc['resources']['replicas'], 1)

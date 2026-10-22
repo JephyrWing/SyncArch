@@ -10,19 +10,36 @@
 | --- | --- |
 | frontend-checks | TypeScript, 프런트 단위 테스트, production build, CI 게이트 실패 사례 |
 | pytest | 격리 SQLite와 실제 Redis를 쓰는 비브라우저 테스트 |
-| mariadb-integration | MariaDB 11.4.13 및 Cloudtype 11.2 호환 검사, migration/schema drift, 실제 DB 컨테이너 재시작 보존 |
-| playwright-e2e | 위에서 만든 production build, Flask·MariaDB·Redis, 실제 Chrome, 덤프 복원, Nginx·Waitress 컨테이너 저장 smoke |
+| mariadb-integration | 운영과 같은 MariaDB 11.2의 행 잠금·경합 전용 검사, migration/schema drift, 실제 DB 컨테이너 재시작 보존 |
+| playwright-e2e | production build와 실제 Chrome의 핵심 인증·문서 충돌·편집 UI 저장 5개, Nginx·Waitress 컨테이너 로그인·저장 smoke |
 
-develop/main PR·push 및 수동 검사에서 실행한다. pytest 분할은 파일 이름 대신
-browser_session fixture 의존성을 사용한다. 따라서 이 fixture를 사용하는
-API 동시성/복원 검사도 E2E에서 실행된다. MariaDB 전용 검사는 SQLite에서 제외하고
-MariaDB에서 실행한다. 각 단계는 선택한 테스트 1건 이상, skip/error/failure 0건을
+develop/main 대상 PR, main push 및 수동 검사에서 실행한다. develop push의 중복 실행은
+제거했다. 같은 PR에 새 커밋이 올라오면 이전 검사를 취소한다. 필수 체크 이름 네 개는
+기존 브랜치 보호와 호환되도록 유지한다. pytest 분할은 browser_session fixture와
+mariadb/deployment_smoke marker를 사용한다. 공통 비브라우저 검사는 SQLite에서 한 번,
+MariaDB 전용 검사는 운영 버전에서 실행한다. 각 단계는 선택한 테스트 1건 이상, skip/error/failure 0건을
 요구하며 pytest 실패 코드를 전파한다. 증빙 업로드만 always()로 실행한다.
 
+전체 브라우저 107개(덤프 복원·장애 주입 포함)와 MariaDB 11.2/11.4.13 각각의
+전체 백엔드 호환 검사는 `Extended regression (manual)` 워크플로로 보존한다.
+Actions에서 해당 워크플로의 Run workflow로 대상 브랜치를 선택해 실행한다.
+DB 스키마·저장·인증·복원 동작을 바꾸는 릴리스는 병합 전에 이 회귀 검사도 실행한다.
+일반 병합의 필수 체크에 전체 회귀 검사를 추가하지 않는다. Ubuntu 24.04 runner에
+설치된 Chrome을 사용하므로 매번 브라우저와 OS 의존성을 다시 설치하지 않는다.
+MariaDB CLI 설치는 덤프 복원이 필요한 전체 회귀 검사에만 남긴다.
+
+과거 Linux esbuild 바이너리를 Node 스크립트로 실행하던 오류는 JS build API 사용으로,
+내보내기 검사의 로그인 복원 시간 초과는 중복 탐색 제거로 수정돼 있다.
+GitHub가 `startup_failure` 또는 테스트 종료 후 진행 중 상태를 반환하면 테스트 실패와
+구분한다. run/job 로그와 annotation을 확인하고, 테스트가 끝났는데 상태만 갱신되지 않은
+경우 전체 테스트를 반복하거나 브랜치 보호를 우회하지 않는다.
+
 develop과 PR에서는 배포하지 않는다. main push의 같은 워크플로에서 네 체크가
-모두 성공해야 배포 job이 시작한다. 전체 40자리 커밋 SHA를 Cloudtype
-context.git.ref로 지정한다. 무료 Git 소스 배포를 사용하며 Cloudtype가 같은 커밋에서
-Dockerfile을 다시 빌드한다. GHCR push/pull과 비공개 레지스트리 구독은 사용하지 않는다.
+모두 성공해야 배포 job이 시작한다. 사용자 요청에 따라 두 서비스의 Cloudtype
+context.git.ref는 main 브랜치로 유지한다. 검사한 전체 40자리 SHA는 RELEASE_SHA로
+기록하고 공개 응답과 대조한다. 배포 직전 main head를 확인하지만 브랜치는 이동할 수
+있으므로 소스 체크아웃의 불변성을 보장하지 않는다. 무료 Git 소스 빌드를 사용하며
+GHCR push/pull과 비공개 레지스트리 구독은 사용하지 않는다.
 CI는 Nginx·Waitress 컨테이너를 실제 실행하고, Dockerfile의 프런트 재빌드 결과를
 검증한 production build의 파일별 SHA-256과 대조한다. Cloudtype의 재빌드 결과가
 CI 이미지와 동일하다고 보장하지는 않는다. 실제 공개 SHA·health·저장 smoke가 통과해야

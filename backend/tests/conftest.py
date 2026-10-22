@@ -11,7 +11,7 @@ from app.extensions import db
 
 
 def pytest_addoption(parser):
-    parser.addoption("--ci-suite", choices=("unit", "mariadb", "browser"), default=None,
+    parser.addoption("--ci-suite", choices=("unit", "mariadb", "mariadb-full", "browser", "browser-smoke"), default=None,
                      help="CI partition by real browser fixture, without omitting API tests in browser fixtures")
 
 
@@ -21,7 +21,11 @@ def pytest_collection_modifyitems(config, items):
         selected, deselected = [], []
         for item in items:
             browser = "browser_session" in item.fixturenames
-            include = browser if suite == "browser" else not browser and (suite != "unit" or "mariadb" not in item.keywords)
+            if suite in ("browser", "browser-smoke"):
+                include = browser and (suite == "browser" or "deployment_smoke" in item.keywords)
+            else:
+                include = not browser and (suite == "mariadb-full" or
+                    ("mariadb" in item.keywords) == (suite == "mariadb"))
             (selected if include else deselected).append(item)
         items[:] = selected
         config.hook.pytest_deselected(items=deselected)
