@@ -120,12 +120,15 @@ export const fetchMessages = async (id: string, since?: string): Promise<ChatMes
 export const sendMessage = async (id: string, body: string): Promise<ChatMessage> =>
   (await request<ChatMessage>('POST', `/api/projects/${id}/messages`, { body })).data!;
 
+// [협업 상태] 같은 계정으로 탭을 여러 개 열어도 한 탭을 닫을 때 다른 탭의 접속 표시가 지워지지 않도록 탭마다 구분한다.
+const TAB_ID = crypto.randomUUID();
+
 /** [협업 상태] 내 접속을 알리고 지금 접속한 멤버 목록을 받는다. */
 export const sendPresence = async (id: string, step: number): Promise<PresenceEntry[]> =>
-  (await request<PresenceEntry[]>('POST', `/api/projects/${id}/presence`, { step })).data!;
+  (await request<PresenceEntry[]>('POST', `/api/projects/${id}/presence`, { step, tabId: TAB_ID })).data!;
 
 export const leavePresence = async (id: string): Promise<void> => {
-  await request('DELETE', `/api/projects/${id}/presence`);
+  await request('DELETE', `/api/projects/${id}/presence?tabId=${TAB_ID}`);
 };
 
 // [멤버 관리] 서버는 사용자 ID를 id로 준다. 화면은 userId를 쓴다.
