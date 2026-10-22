@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FolderOpen, KeyRound, Layers, LogOut, Plus } from 'lucide-react';
 import type { ProjectSummary, SessionUser } from '../types/index.ts';
+import { AccountSettings } from './AccountSettings.tsx';
 
 interface ProjectLobbyProps {
   me: SessionUser;
@@ -42,10 +43,12 @@ export const ProjectLobby: React.FC<ProjectLobbyProps> = ({ me, projects, onOpen
             <Layers className="h-5 w-5" />
             <span>SyncArch</span>
           </div>
+          <div className="flex items-center gap-2"><AccountSettings />
           <button onClick={onLogout} className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:text-white">
             <LogOut className="h-3.5 w-3.5" />
             {me.displayName} 로그아웃
           </button>
+          </div>
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">어떤 프로젝트에서 작업할까요?</h1>

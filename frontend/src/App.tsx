@@ -15,6 +15,7 @@ import { LoginScreen } from './components/LoginScreen.tsx';
 import { ProjectLobby } from './components/ProjectLobby.tsx';
 import { InviteButton } from './components/InviteButton.tsx';
 import { ChatPanel } from './components/ChatPanel.tsx';
+import { AccountSettings } from './components/AccountSettings.tsx';
 import { CollabBanner, SaveStatusBadge, ToastStack, type Toast } from './components/CollabStatus.tsx';
 import {
   cloneProject,
@@ -31,6 +32,7 @@ import { ApiError } from './api/client.ts';
 import { toTeamMembers } from './adapters/projectAdapter.ts';
 import { SAFE_TO_LEAVE, useProjectDocument, type RemoteChange } from './hooks/useProjectDocument.ts';
 import { usePresence } from './hooks/usePresence.ts';
+import { isAccessError, useProjectAccess } from './hooks/useProjectAccess.ts';
 import { clearReferences, findReferences, renameColumn, renameTable } from './utils/erdRename.ts';
 import { isValidConnection } from './utils/architecture.ts';
 import { voteCount } from './utils/votes.ts';
@@ -94,7 +96,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
     pushToast(change.text, change.changes.slice(0, 4).map((c) => `${c.area} '${c.name}' ${c.kind}`), `remote:${change.actorId}`);
   };
 
-  const doc = useProjectDocument(currentProjectId, { onRemoteChange: handleRemoteChange, onAuthExpired: onLoggedOut });
+  const { access, error: accessError } = useProjectAccess(currentProjectId);
+  const doc = useProjectDocument(currentProjectId, { onRemoteChange: handleRemoteChange, onAuthExpired: onLoggedOut, access });
   // [프로젝트] 다른 프로젝트를 여는 동안 이전 프로젝트 문서를 잠깐이라도 보여 주지 않는다.
   const currentProject: ProjectData | null =
     doc.project && doc.project.id === currentProjectId ? { ...doc.project, currentStep } : null;
@@ -120,16 +123,24 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   }, []);
 
   // [협업 상태] 접속 중인 멤버와 보고 있는 단계. 아바타를 누르면 그 멤버의 단계를 따라간다.
-  const online = usePresence(currentProjectId, currentStep);
+  const online = usePresence(currentProjectId, currentStep, access);
 
   // [멤버 관리] 예전 하드코딩 팀 목록 대신 실제 멤버를 쓴다.
   // 화면을 연 뒤 초대 코드로 참가한 팀원이 접속하면 목록에 없으므로 그때 다시 불러온다.
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const hasUnknownOnline = online.some((entry) => !teamMembers.some((member) => member.id === entry.userId));
   useEffect(() => {
-    if (!currentProjectId) return;
-    listMembers(currentProjectId).then((members) => setTeamMembers(toTeamMembers(members))).catch(() => setTeamMembers([]));
-  }, [currentProjectId, hasUnknownOnline]);
+    if (!currentProjectId || access.isStopped()) return;
+    let alive = true;
+    listMembers(currentProjectId).then((members) => {
+      if (alive && !access.isStopped()) setTeamMembers(toTeamMembers(members));
+    }).catch((error) => {
+      if (!alive) return;
+      if (isAccessError(error)) access.stop(error);
+      setTeamMembers([]);
+    });
+    return () => { alive = false; };
+  }, [currentProjectId, hasUnknownOnline, access]);
   const [followId, setFollowId] = useState<string | null>(null);
   const people: TeamMember[] = teamMembers.map((member) => {
     const entry = online.find((o) => o.userId === member.id);
@@ -146,20 +157,22 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   // 저장하지 않게, 창으로 돌아올 때와 10초마다 확인해서 바뀌었으면 새 계정으로 다시 연다.
   useEffect(() => {
     const check = () =>
+      !access.isStopped() &&
       fetchMe()
         .then((user) => {
           if (user.id === me.id) return;
-          if (doc.isSafeToLeave()) window.location.reload();
-          else pushToast('이 브라우저에서 다른 계정으로 로그인했습니다', ['저장 안 된 변경을 백업한 뒤 새로고침하세요. 지금 저장하면 다른 계정 이름으로 저장됩니다.'], 'account-switch');
+          access.stop(new ApiError(401, 'ACCOUNT_CHANGED', '이 브라우저에서 다른 계정으로 로그인했습니다.'));
         })
-        .catch(() => undefined);
+        .catch((error) => {
+          if ((error as { status?: number }).status === 401) access.stop(new ApiError(401, 'AUTH_REQUIRED', '로그인이 만료되었습니다.'));
+        });
     window.addEventListener('focus', check);
     const timer = window.setInterval(check, 10000);
     return () => {
       window.removeEventListener('focus', check);
       window.clearInterval(timer);
     };
-  }, [me.id]);
+  }, [me.id, access]);
 
   useEffect(() => {
     const warnUnsaved = (e: BeforeUnloadEvent) => {
@@ -249,15 +262,19 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
 
   const handleLogout = async () => {
     if (!guardLeave()) return;
+    access.pause();
     try {
       await logout();
     } catch (error) {
       // [로그인] 401은 서버 세션이 이미 없다는 뜻이다. 다른 실패면 세션은 살아 있다.
       if ((error as { status?: number }).status !== 401) {
+        access.resume();
+        doc.resumeSaving();
         pushToast('로그아웃하지 못했습니다', [(error as Error).message]);
         return;
       }
     }
+    access.stop(new ApiError(401, 'AUTH_REQUIRED', '로그아웃했습니다.'));
     // [문서 저장] 요청 중에 생긴 편집은 화면에 남고, 그 저장은 백업 선택지와 함께 실패한다.
     if (!doc.isSafeToLeave()) {
       pushToast('로그아웃했지만 저장되지 않은 변경이 있어 화면을 유지합니다', ['상단 안내에서 내 변경을 백업한 뒤 새로고침하세요.']);
@@ -285,7 +302,8 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
   const statusSlot = (
     <div className="flex items-center gap-1.5">
       <SaveStatusBadge status={doc.status} version={doc.version} />
-      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} />}
+      <AccountSettings />
+      {myRole === 'OWNER' && currentProjectId && <InviteButton key={currentProjectId} projectId={currentProjectId} access={access} />}
       <button
         onClick={handleBackToLobby}
         className="flex items-center gap-1 rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:text-white"
@@ -330,7 +348,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
           <>
             <p className="text-rose-300">{doc.message}</p>
             <div className="flex gap-2">
-              <button onClick={doc.reloadLatest} className="rounded-lg bg-indigo-600 px-3 py-1.5 font-bold text-white">다시 불러오기</button>
+              <button onClick={accessError ? doc.reconnect : doc.reloadLatest} className="rounded-lg bg-indigo-600 px-3 py-1.5 font-bold text-white">{accessError ? '다시 연결' : '다시 불러오기'}</button>
               <button onClick={() => setCurrentProjectId(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300">목록으로</button>
             </div>
           </>
@@ -743,11 +761,13 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
       />
 
       <CollabBanner
+        suspended={Boolean(accessError)}
         status={doc.status}
         message={doc.message}
         onRetry={doc.retry}
         onBackup={doc.downloadBackup}
         onReloadLatest={doc.reloadLatest}
+        onReconnect={doc.reconnect}
       />
 
       {/* [공통 화면] 크기 조절 사이드바가 있는 분할 작업 공간 */}
@@ -859,6 +879,7 @@ function Workspace({ me, onLoggedOut }: { me: SessionUser; onLoggedOut: () => vo
 
       {/* [채팅] 편집하면서 팀원과 이야기하는 대화창 */}
       <ChatPanel
+        access={access}
         key={currentProject.id}
         projectId={currentProject.id}
         meId={me.id}

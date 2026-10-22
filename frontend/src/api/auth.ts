@@ -21,6 +21,7 @@ export class AuthClient {
   private accessToken: string | null = null;
   private refreshPending: Promise<AuthUser> | null = null;
   private generation = 0;
+  private userId: string | null = null;
 
   constructor(private readonly transport: typeof fetch = (...args) => fetch(...args)) {}
 
@@ -44,12 +45,15 @@ export class AuthClient {
   async login(loginId: string, password: string): Promise<AuthUser> {
     const generation = ++this.generation;
     this.accessToken = null;
+    this.userId = null;
     return this.exclusive(async () => {
       const result = await this.json<TokenResponse>('login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginId, password }),
       });
-      if (generation === this.generation) this.accessToken = result.accessToken;
+      if (generation !== this.generation) throw new AuthError('SESSION_CHANGED', 401);
+      this.accessToken = result.accessToken;
+      this.userId = result.user.id;
       return result.user;
     });
   }
@@ -57,13 +61,18 @@ export class AuthClient {
   refresh(): Promise<AuthUser> {
     if (this.refreshPending) return this.refreshPending;
     const generation = this.generation;
+    const expectedUserId = this.userId;
     const operation = this.exclusive(async () => {
       // 잠금을 얻은 뒤 최신 쿠키에 대응하는 CSRF 값을 조회합니다.
       const { csrfToken } = await this.json<{ csrfToken: string }>('csrf');
       const result = await this.json<TokenResponse>('refresh', {
         method: 'POST', headers: { 'X-CSRF-TOKEN': csrfToken },
       });
-      if (generation === this.generation) this.accessToken = result.accessToken;
+      if (generation !== this.generation) throw new AuthError('SESSION_CHANGED', 401);
+      // [구글 로그인] 공유 RT 쿠키가 다른 계정으로 바뀌어도 이전 화면의 쓰기를 그 계정 이름으로 재전송하지 않는다.
+      if (expectedUserId && result.user.id !== expectedUserId) throw new AuthError('ACCOUNT_CHANGED', 401);
+      this.accessToken = result.accessToken;
+      this.userId = result.user.id;
       return result.user;
     }).catch((error: unknown) => {
       if (generation === this.generation) this.accessToken = null;
@@ -89,6 +98,10 @@ export class AuthClient {
 
   authorization(): Record<string, string> {
     return this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {};
+  }
+
+  sessionVersion(): number {
+    return this.generation;
   }
 
   async logout(): Promise<void> {

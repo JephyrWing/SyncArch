@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageCircle, Send, X } from 'lucide-react';
 import { useChat } from '../hooks/useChat.ts';
+import type { ProjectAccess } from '../hooks/useProjectAccess.ts';
 
 interface ChatPanelProps {
   projectId: string;
   meId: string;
   readOnly: boolean;
+  access: ProjectAccess;
   /** [채팅] 헤더와 같은 이름(같은 이름의 멤버는 이메일 앞부분으로 구분)을 쓰려고 받는다. */
   names?: Record<string, string>;
 }
@@ -13,8 +15,9 @@ interface ChatPanelProps {
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 
 /** [채팅] 편집하면서 팀원과 이야기하는 접이식 대화창. 닫혀 있을 때 온 팀원 메시지 수를 보여 준다. */
-export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly, names = {} }) => {
-  const { messages, loaded, error, send } = useChat(projectId);
+export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly, access, names = {} }) => {
+  const { messages, loaded, error, send } = useChat(projectId, access);
+  const blocked = access.isStopped();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -40,7 +43,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly,
 
   const submit = async () => {
     const body = draft.trim();
-    if (!body || sending) return;
+    if (!body || sending || readOnly || blocked) return;
     setSending(true);
     setSendError('');
     try {
@@ -96,7 +99,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly,
           );
         })}
       </div>
-      {(error || sendError) && <p role="alert" className="px-3 pb-1 text-rose-400">{sendError || error}</p>}
+      {(error || sendError || access.getError()) && <p role="alert" className="px-3 pb-1 text-rose-400">{access.getError()?.message || sendError || error}</p>}
       <form
         className="flex items-end gap-2 border-t border-slate-800 p-2"
         onSubmit={(e) => {
@@ -115,13 +118,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ projectId, meId, readOnly,
               submit();
             }
           }}
-          disabled={readOnly}
+          disabled={readOnly || blocked}
           maxLength={1000}
           rows={2}
           placeholder={readOnly ? '보관된 프로젝트는 대화를 보낼 수 없습니다' : '메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)'}
           className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-white focus:border-indigo-500 focus:outline-none"
         />
-        <button type="submit" disabled={readOnly || sending || !draft.trim()} className="rounded-lg bg-indigo-600 p-2 text-white hover:bg-indigo-500 disabled:opacity-40" aria-label="보내기">
+        <button type="submit" disabled={readOnly || blocked || sending || !draft.trim()} className="rounded-lg bg-indigo-600 p-2 text-white hover:bg-indigo-500 disabled:opacity-40" aria-label="보내기">
           <Send className="h-4 w-4" />
         </button>
       </form>
