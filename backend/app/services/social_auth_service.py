@@ -37,21 +37,6 @@ def begin_google(states, provider, *, actor=None, session_id=None, access_expire
     return provider.authorization_url(state, nonce, verifier), binding
 
 
-def authoritative_email(profile):
-    if profile.get("email_verified") is not True:
-        return None
-    try:
-        _, normalized = normalize_email(profile.get("email"))
-    except ValueError:
-        return None
-    domain = normalized.rsplit("@", 1)[1]
-    hd = profile.get("hd")
-    if domain in {"gmail.com", "googlemail.com"} or (
-            isinstance(hd, str) and hd.isascii() and hd.lower() == domain and re.fullmatch(r"[A-Za-z0-9.-]+", hd)):
-        return normalized
-    return None
-
-
 def _conflict(error):
     # 유일성 경쟁 또는 InnoDB 교착은 계정 덮어쓰기 대신 명시적 충돌로 반환합니다.
     if isinstance(error, IntegrityError) or getattr(error.orig, "args", [None])[0] in {1205, 1213}:
@@ -68,11 +53,8 @@ def connect_identity(session_factory, tokens, profile, *, user_id=None, session_
             elif user_id is not None:
                 candidate_id = user_id
             else:
-                normalized = authoritative_email(profile)
-                candidates = identities.user_by_email(session, normalized) if normalized else []
-                if len(candidates) != 1:
-                    raise GoogleLinkRequired()
-                candidate_id = candidates[0].id
+                # 공개 가입의 이메일은 소유권 증명이 아니므로 계정 연결에 사용하지 않습니다.
+                raise GoogleLinkRequired()
             user = identities.user_by_id(session, candidate_id)
             actor = _actor(user)
             # 잠금 대기 뒤 최신 identity와 이메일을 다시 확인합니다.
@@ -84,9 +66,7 @@ def connect_identity(session_factory, tokens, profile, *, user_id=None, session_
                 if not tokens.is_active(session_id, user_id):
                     raise AuthenticationRequired()
             elif known is None:
-                normalized = authoritative_email(profile)
-                if not normalized or user.email_normalized != normalized:
-                    raise GoogleLinkRequired()
+                raise GoogleLinkRequired()
             if known is None:
                 identities.insert(session, user.id, profile)
             else:

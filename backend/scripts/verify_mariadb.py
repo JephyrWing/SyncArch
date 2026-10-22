@@ -115,6 +115,8 @@ def main():
         from app.extensions import db
         from app.models import AppUser, Project, ProjectDocument, UserIdentity, utc_now
         from app.schemas.seed_schema import ACCOUNTS
+        from app.schemas.auth_schema import parse_registration
+        from app.services.auth_service import register_user, authenticate
         config = {"TESTING": True, "SQLALCHEMY_DATABASE_URI": uri}
         app = create_app(config)
         with app.app_context():
@@ -145,6 +147,10 @@ def main():
                                             payload={"schemaVersion": 1, "marker": "재시작 보존 🚀"}))
             db.session.commit()
             db.session.remove()
+            signup_password = secrets.token_urlsafe(24)
+            signup_actor = register_user(db.session.session_factory, **parse_registration({
+                "loginId": "registration-restart", "displayName": "가입 재시작 검증",
+                "password": signup_password, "email": "Signup.Restart@GMAIL.com"}))
             db.engine.dispose()
         # Explicit bootstrap only: passwords remain in memory and out of output.
         os.environ["SEED_ACCOUNT_PASSWORDS"] = json.dumps({key: secrets.token_urlsafe(24) for key in ACCOUNTS})
@@ -194,6 +200,9 @@ def main():
             direct_user = db.session.scalar(select(AppUser).where(AppUser.login_id == "mvp-email-restart"))
             assert direct_user.email == "Direct@GMAIL.com" and direct_user.email_normalized == "direct@gmail.com"
             assert direct_user.email_verified_at is None
+            signup_user = db.session.get(AppUser, signup_actor.id)
+            assert signup_user.email_normalized == "signup.restart@gmail.com"
+            assert authenticate(db.session.session_factory, "registration-restart", signup_password).id == signup_actor.id
             assert {user.login_id: (user.id, user.password_hash) for user in
                     db.session.scalars(select(AppUser).where(AppUser.login_id.in_(ACCOUNTS)))} == accounts_before
             restored = project_service.get_document(db.session.session_factory, restart_actor_id, saved_project["id"])
@@ -214,6 +223,7 @@ def main():
         print("PASS: W05 committed document/metadata/version/mutation result/activity survive DB and app restart", flush=True)
         print("PASS: W03 verified email and Google subject/user identity survive DB and app restart", flush=True)
         print("PASS: W03 direct email without local verification and legacy timestamp survive DB and app restart", flush=True)
+        print("PASS: W16 registered UUID/email/hash and password authentication survive DB and app restart", flush=True)
     finally:
         try:
             if process is not None and process.poll() is None:

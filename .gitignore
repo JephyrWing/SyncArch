@@ -62,6 +62,7 @@ blob-report/
 # Flask 로컬 상태, 격리 DB·도구·검증 증빙과 실행 중 생성 파일
 /backend/instance/
 /.local/
+/backend/.local/
 /backups/
 /backend/backups/
 /logs/

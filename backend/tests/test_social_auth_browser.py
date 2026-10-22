@@ -19,8 +19,7 @@ def test_browser_provider_fixture_redirect_cookie_and_memory_recovery(google_app
         assert sign_in(page) == "검증 A"
         saved = page.evaluate("password => fetch('/api/auth/email', {method:'POST',headers:{...window.auth.authorization(),'Content-Type':'application/json'},body:JSON.stringify({email:'Owner@GMAIL.com',password})}).then(async r=>({status:r.status,body:await r.json()}))", PASSWORD)
         assert saved == {"status": 200, "body": {"data": {"email": "Owner@GMAIL.com"}}}
-        page.evaluate("() => window.auth.logout()")
-        data = page.evaluate("() => fetch('/api/auth/google/start', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json()).then(r=>r.data)")
+        data = page.evaluate("password => fetch('/api/auth/google/link/start', {method:'POST',headers:{...window.auth.authorization(),'Content-Type':'application/json'},body:JSON.stringify({password})}).then(r=>r.json()).then(r=>r.data)", PASSWORD)
         params = parse_qs(urlsplit(data["authorizationUrl"]).query)
         state = params["state"][0]
         states = state_repository(app)
@@ -34,7 +33,7 @@ def test_browser_provider_fixture_redirect_cookie_and_memory_recovery(google_app
             route.fulfill(status=302, headers={"Location": origin + "/api/auth/google/callback?" + urlencode({"state": state, "code": "fixture-code"})}, body="")
         context.route("https://accounts.google.com/**", provider_redirect)
         page.goto(data["authorizationUrl"])
-        page.wait_for_url(origin + "/auth/callback")
+        page.wait_for_url(origin + "/auth/callback?flow=link&linked=true")
         page.wait_for_function("Boolean(window.auth)")
         assert page.evaluate("() => Object.keys(window.auth.authorization()).length") == 0
         assert page.evaluate("() => window.auth.me().then(user=>user.displayName)") == "검증 A"

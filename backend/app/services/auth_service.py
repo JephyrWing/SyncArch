@@ -1,10 +1,11 @@
 """HTTP/쿠키와 독립적인 계정 확인·세션 유효성 검사입니다."""
 from dataclasses import dataclass
 
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..errors import AuthenticationRequired
-from ..repositories.user_repository import find_by_id, find_by_login_id
+from ..errors import AuthenticationRequired, RegistrationConflict
+from ..repositories.user_repository import add_user, find_by_id, find_by_login_id
 
 _DUMMY_HASH = generate_password_hash("not-a-real-account-password")
 
@@ -17,6 +18,24 @@ class Actor:
 
     def public(self):
         return {"id": self.id, "loginId": self.login_id, "displayName": self.display_name}
+
+
+def register_user(session_factory, *, login_id, display_name, password, email, email_normalized):
+    password_hash = generate_password_hash(password)
+    try:
+        with session_factory.begin() as session:
+            user = add_user(session, login_id=login_id, display_name=display_name,
+                            password_hash=password_hash, email=email, email_normalized=email_normalized)
+            session.flush()
+            actor = Actor(user.id, user.login_id, user.display_name)
+        # 세션 발급은 별도 로그인에서 수행하며 커밋 실패를 가입 성공으로 알리지 않습니다.
+        return actor
+    except IntegrityError as error:
+        duplicate = (getattr(error.orig, "sqlite_errorcode", None) in {1555, 2067}
+                     or getattr(error.orig, "args", (None,))[0] == 1062)
+        if duplicate:
+            raise RegistrationConflict() from None
+        raise
 
 
 def authenticate(session_factory, login_id, password):
