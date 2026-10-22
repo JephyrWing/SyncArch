@@ -58,6 +58,14 @@ import type {
 } from './types/index.ts';
 
 export default function App() {
+  const [googleError, setGoogleError] = useState(() => {
+    if (window.location.pathname !== '/auth/callback') return '';
+    const code = new URLSearchParams(window.location.search).get('error');
+    if (!code) return '';
+    return code === 'GOOGLE_LINK_REQUIRED'
+      ? 'Google 계정이 아직 연결되지 않았습니다. 기존 계정으로 로그인한 뒤 Google 연결에서 비밀번호를 확인해 주세요.'
+      : 'Google 로그인을 완료하지 못했습니다. 계정과 연결 상태를 확인한 뒤 다시 시도해 주세요.';
+  });
   // [구글 로그인] 세션 확인 중에는 undefined다.
   const [googleLinked, setGoogleLinked] = useState(() => window.location.pathname === '/auth/callback' && new URLSearchParams(window.location.search).get('linked') === 'true');
   const [me, setMe] = useState<SessionUser | null | undefined>(undefined);
@@ -72,15 +80,15 @@ export default function App() {
   if (me === undefined) {
     return <div className="flex h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">불러오는 중…</div>;
   }
-  if (!me) return <LoginScreen onLogin={setMe} />;
-  return <Workspace me={me} onLoggedOut={() => { setMe(null); setGoogleLinked(false); }} googleLinked={googleLinked} />;
+  if (!me) return <LoginScreen initialError={googleError} onLogin={(user) => { setMe(user); setGoogleError(''); }} />;
+  return <Workspace me={me} onLoggedOut={() => { setMe(null); setGoogleLinked(false); setGoogleError(''); }} googleLinked={googleLinked} googleError={googleError} />;
 }
 
 // [기능 명세] 개수 + 1이 아니라 최댓값 + 1을 써서, FEAT-02를 지워도 다음 기능이 FEAT-03을 다시 쓰지 않게 한다(02 FEAT 03).
 const nextFeatureNumber = (features: FeatureSpec[]): number =>
   Math.max(0, ...features.map((f) => Number(/^FEAT-(\d+)$/.exec(featureCode(f))?.[1] ?? 0))) + 1;
 
-function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLoggedOut: () => void; googleLinked: boolean }) {
+function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: SessionUser; onLoggedOut: () => void; googleLinked: boolean; googleError: string }) {
   // [프로젝트] 프로젝트는 서버에서 받고, currentStep은 개인 화면 상태다(02 VIEW 02).
   const [projectList, setProjectList] = useState<ProjectSummary[]>([]);
   const [isListLoaded, setIsListLoaded] = useState(false);
@@ -88,7 +96,10 @@ function Workspace({ me, onLoggedOut, googleLinked }: { me: SessionUser; onLogge
   const [currentStep, setCurrentStep] = useState<StepNumber>(1);
   // [ERD 설계] 서버 저장 계약은 mariadb만 받는다. 다른 DBMS는 SQL 미리보기·내보내기용 개인 화면 선택이다.
   const [previewDbms, setPreviewDbms] = useState<SqlDialect>('mariadb');
-  const [toasts, setToasts] = useState<Toast[]>(() => googleLinked ? [{ id: Date.now(), text: 'Google 계정을 연결했습니다.', details: [] }] : []);
+  const [toasts, setToasts] = useState<Toast[]>(() => [
+    ...(googleLinked ? [{ id: Date.now(), text: 'Google 계정을 연결했습니다.', details: [] }] : []),
+    ...(googleError ? [{ id: Date.now() + 1, text: googleError, details: [] }] : []),
+  ]);
 
   const pushToast = (text: string, details: string[] = [], key?: string) => {
     const id = Date.now() + Math.random();
