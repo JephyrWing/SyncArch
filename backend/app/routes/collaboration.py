@@ -44,13 +44,14 @@ def join():
 
 @collaboration.post("/<project_id>/presence")
 def presence(project_id):
+    step, tab_id = collab_schema.presence_input(request.get_json())
     return jsonify(data=presence_service.heartbeat(db.session.session_factory, g.actor_id, identifier(project_id),
-                                                   collab_schema.step_input(request.get_json())))
+                                                   step, tab_id))
 
 
 @collaboration.delete("/<project_id>/presence")
 def leave(project_id):
-    presence_service.leave(g.actor_id, identifier(project_id))
+    presence_service.leave(g.actor_id, identifier(project_id), collab_schema.tab_input(request.args.get("tabId")))
     return "", 204
 
 

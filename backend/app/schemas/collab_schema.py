@@ -14,11 +14,17 @@ def code_input(value):
     return code
 
 
-def step_input(value):
-    step = object_fields(value, ["step"])["step"]
+def presence_input(value):
+    data = object_fields(value, ["step"], ["tabId"])
+    step = data["step"]
     if type(step) is not int or step not in (1, 2, 3, 4):
         raise BadRequest("step은 1~4 중 하나여야 합니다.")
-    return step
+    return step, tab_input(data.get("tabId"))
+
+
+def tab_input(value):
+    # 같은 사람이 연 탭을 따로 세어, 한 탭을 닫아도 다른 탭의 접속 표시는 남깁니다. 없으면 예전처럼 사람 하나로 봅니다.
+    return "" if value is None else text(value, 64)
 
 
 def message_input(value):

@@ -1,5 +1,7 @@
 """초대 코드·채팅·접속 표시·API 명세 엑셀."""
+from contextlib import nullcontext
 import io
+from types import SimpleNamespace
 import uuid
 from unittest.mock import patch
 
@@ -119,6 +121,47 @@ def test_presence_lists_members_with_their_step_and_expires(users, monkeypatch):
     assert [e["displayName"] for e in editor.post(f"/api/projects/{project_id}/presence", json={"step": 2}, headers=eh).json["data"]] == ["검증 B"]
     assert editor.delete(f"/api/projects/{project_id}/presence", headers=eh).status_code == 204
     assert [e["displayName"] for e in owner.post(f"/api/projects/{project_id}/presence", json={"step": 3}, headers=oh).json["data"]] == ["검증 A"]
+
+
+def test_presence_keeps_other_tabs_and_drops_removed_members(users):
+    owner, editor = users["owner"], users["editor"]
+    oh, eh = users["owner_headers"], users["editor_headers"]
+    project_id = create(users)["id"]
+    url = f"/api/projects/{project_id}/presence"
+    owner.post(f"/api/projects/{project_id}/members", json={"loginId": "auth-b"}, headers=oh)
+
+    # 같은 사람이 탭 두 개를 열면 한 줄로 보이고, 가장 최근 탭의 단계를 보여 줍니다.
+    editor.post(url, json={"step": 1, "tabId": "tab-1"}, headers=eh)
+    online = editor.post(url, json={"step": 4, "tabId": "tab-2"}, headers=eh).json["data"]
+    assert [(e["displayName"], e["step"]) for e in online] == [("검증 B", 4)]
+
+    # 한 탭을 닫아도 다른 탭은 접속 중으로 남습니다.
+    assert editor.delete(f"{url}?tabId=tab-2", headers=eh).status_code == 204
+    assert sorted((e["displayName"], e["step"]) for e in owner.post(url, json={"step": 2}, headers=oh).json["data"]) == [
+        ("검증 A", 2), ("검증 B", 1)]
+
+    # 멤버에서 빠진 사람은 TTL을 기다리지 않고 바로 목록에서 빠집니다.
+    owner.delete(f'/api/projects/{project_id}/members/{users["editor_id"]}', headers=oh)
+    assert [e["displayName"] for e in owner.post(url, json={"step": 2}, headers=oh).json["data"]] == ["검증 A"]
+    assert owner.post(url, json={"step": 2, "tabId": ""}, headers=oh).status_code == 400
+
+
+def test_presence_does_not_bring_back_a_member_removed_during_the_access_check(monkeypatch):
+    from app.services import presence_service, project_events
+
+    def removed_while_checking(session, actor_id, project_id):
+        project_events.access_revoked.send("project-service", project_id=project_id, user_id=actor_id,
+                                           reason="MEMBER_REMOVED")
+
+    monkeypatch.setattr(presence_service, "require_access", removed_while_checking)
+    monkeypatch.setattr(presence_service, "require_active_actor", lambda session, actor_id: SimpleNamespace(display_name="B"))
+    assert presence_service.heartbeat(nullcontext, "user-b", "project-race", 1, "tab-1") == []
+
+    # 권한 확인 뒤 TTL보다 오래 멈춘 신호는 제외 기록이 정리된 뒤라도 올리지 않습니다.
+    clock = [1000.0]
+    monkeypatch.setattr("app.services.presence_service.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr(presence_service, "require_access", lambda session, actor_id, project_id: clock.__setitem__(0, 1016.0))
+    assert presence_service.heartbeat(nullcontext, "user-c", "project-slow", 1, "tab-1") == []
 
 
 def test_presence_requires_membership_and_a_valid_step(users):
