@@ -20,13 +20,13 @@ export const toProjectData = (view: DocumentView, currentStep: StepNumber): Proj
   currentStep,
   stepLocks: view.payload.stepLocks ?? DEFAULT_LOCKS,
   ideas: view.payload.ideas,
-  // 서버가 허용하는 최소 문서에도 화면이 필요한 표시 기본값을 제공한다.
   features: view.payload.features.map((feature) => ({
     ...feature,
-    domain: feature.domain ?? '', priority: feature.priority ?? 'P1', assignee: feature.assignee ?? '',
-    method: feature.method ?? 'GET', endpoint: feature.endpoint ?? '',
+    domain: feature.domain ?? '', assignee: feature.assignee ?? '', endpoint: feature.endpoint ?? '',
     requestFields: feature.requestFields ?? '', responseFields: feature.responseFields ?? '',
-    summary: feature.summary ?? '', status: feature.status ?? 'PLANNED',
+    summary: feature.summary ?? '', responseStatusCodes: feature.responseStatusCodes ?? [],
+    // PLANNED는 서버의 기본 상태다. method·priority에는 의미를 만들어 넣지 않는다.
+    status: feature.status ?? 'PLANNED',
   })),
   nodes: view.payload.nodes.map((node) => ({
     ...node, techStack: node.techStack ?? [], description: node.description ?? '',

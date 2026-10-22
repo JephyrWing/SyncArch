@@ -62,7 +62,7 @@ export const ArchItemList: React.FC<ArchItemListProps> = ({
               <div>
                 <div className="text-xs font-bold text-slate-200">{node.name}</div>
                 <div className="text-[10px] text-slate-400 font-medium">
-                  {node.category} · {node.assignedTeam}
+                  {node.category} · {node.assignedTeam ?? '미지정'}
                 </div>
               </div>
             </div>

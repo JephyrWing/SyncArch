@@ -53,7 +53,7 @@ export const SequenceFlow: React.FC<SequenceFlowProps> = ({ feature: selectedFea
       {/* [기능 명세] 흐름 화살표 오버레이 */}
       <div className="absolute inset-x-8 sm:inset-x-12 top-20 flex flex-col gap-3 pointer-events-none text-[10px] font-mono">
         <div className="flex items-center text-sky-400">
-          <span className="bg-slate-900 px-1 rounded border border-slate-700 mr-1 truncate max-w-[120px] sm:max-w-none">{selectedFeature.method} {selectedFeature.endpoint}</span>
+          <span className="bg-slate-900 px-1 rounded border border-slate-700 mr-1 truncate max-w-[120px] sm:max-w-none">{selectedFeature.method ?? '미지정'} {selectedFeature.endpoint}</span>
           <div className="flex-1 border-t-2 border-sky-500 border-dashed relative">
             <span className="absolute right-0 -top-1.5">▶</span>
           </div>

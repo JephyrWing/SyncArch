@@ -138,7 +138,7 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
   }, []);
 
   // [협업 상태] 접속 중인 멤버와 보고 있는 단계. 아바타를 누르면 그 멤버의 단계를 따라간다.
-  const online = usePresence(currentProjectId, currentStep, access);
+  const { online, confirmed: presenceConfirmed } = usePresence(currentProjectId, currentStep, access);
 
   // [멤버 관리] 예전 하드코딩 팀 목록 대신 실제 멤버를 쓴다.
   // 화면을 연 뒤 초대 코드로 참가한 팀원이 접속하면 목록에 없으므로 그때 다시 불러온다.
@@ -157,16 +157,15 @@ function Workspace({ me, onLoggedOut, googleLinked, googleError }: { me: Session
     return () => { alive = false; };
   }, [currentProjectId, hasUnknownOnline, access]);
   const [followId, setFollowId] = useState<string | null>(null);
+  useEffect(() => {
+    if (presenceConfirmed && followId && !online.some((entry) => entry.userId === followId)) setFollowId(null);
+  }, [online, presenceConfirmed, followId]);
   const people: TeamMember[] = teamMembers.map((member) => {
     const entry = online.find((o) => o.userId === member.id);
     return { ...member, isOnline: Boolean(entry), currentStep: entry?.step ?? member.currentStep, isSpotlight: member.id === followId };
   });
   // [협업 상태] 처음 목록을 받기 전이거나 멤버에서 빠진 사람은 따라가지 않는다.
   const followed = people.find((member) => member.id === followId && member.isOnline) ?? null;
-  // 이탈을 확인한 대상은 해제한다. 재접속만으로 사용자의 따라보기 선택을 되살리지 않는다.
-  useEffect(() => {
-    if (followId && !followed) setFollowId(null);
-  }, [followId, Boolean(followed)]);
   useEffect(() => {
     if (followed) setCurrentStep(followed.currentStep);
   }, [followed?.currentStep]);
