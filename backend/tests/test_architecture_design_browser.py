@@ -48,6 +48,10 @@ def test_architecture_panel_width_is_personal_persistent_and_step_specific(brows
         divider.dblclick()
         expect(panel).to_have_attribute("style", "width: 30%;")
         assert page.evaluate("localStorage.getItem('syncarch_sidebar_width')") == "48"
+        page.get_by_role("button", name="Step 1. 아이디어 보드", exact=True).click()
+        expect(page.locator('main div[style="width: 48%;"]')).to_be_visible()
+        page.get_by_role("button", name="Step 3. 시스템 아키텍처", exact=True).click()
+        expect(panel).to_have_attribute("style", "width: 30%;")
         assert document(setup, pid)["version"] == before["version"]
         assert writes == []
     finally:
